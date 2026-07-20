@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: car-sharing-service
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
