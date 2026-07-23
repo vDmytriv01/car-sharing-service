@@ -1,0 +1,5 @@
+spring:
+  datasource:
+    password: ${DB_PASSWORD:password}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/car_sharing}
+    username: ${DB_USERNAME:car_sharing}
