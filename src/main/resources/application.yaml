@@ -29,3 +29,9 @@ springdoc:
     operations-sorter: method
     path: /swagger-ui.html
     tags-sorter: alpha
+
+security:
+  jwt:
+    expiration: ${JWT_EXPIRATION:1h}
+    issuer: ${JWT_ISSUER:car-sharing-service}
+    secret: ${JWT_SECRET}

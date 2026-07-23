@@ -1,0 +1,5 @@
+security:
+  jwt:
+    expiration: 1h
+    issuer: car-sharing-service-test
+    secret: dGVzdC1qd3Qtc2lnbmluZy1rZXktbXVzdC1iZS0zMi1ieXRlcy1sb25n

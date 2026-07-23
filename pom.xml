@@ -19,6 +19,7 @@
         <checkstyle.config.location>checkstyle.xml</checkstyle.config.location>
         <jacoco.maven.plugin.version>0.8.15</jacoco.maven.plugin.version>
         <jacoco.minimum.line.coverage>0.60</jacoco.minimum.line.coverage>
+        <jjwt.version>0.13.0</jjwt.version>
         <springdoc.version>3.0.3</springdoc.version>
     </properties>
     <dependencies>
@@ -51,10 +52,27 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
