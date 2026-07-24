@@ -1,5 +1,6 @@
 package com.vdmytriv.carsharing.security;
 
+import com.vdmytriv.carsharing.exception.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -61,7 +62,7 @@ public class RestSecurityExceptionHandler
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(
                 response.getOutputStream(),
-                new SecurityErrorResponse(
+                new ApiErrorResponse(
                         Instant.now(),
                         status.value(),
                         status.getReasonPhrase(),
@@ -69,14 +70,5 @@ public class RestSecurityExceptionHandler
                         request.getRequestURI()
                 )
         );
-    }
-
-    private record SecurityErrorResponse(
-            Instant timestamp,
-            int status,
-            String error,
-            String message,
-            String path
-    ) {
     }
 }
