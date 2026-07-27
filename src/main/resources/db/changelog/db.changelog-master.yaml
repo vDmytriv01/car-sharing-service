@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/changes/01-create-users-and-roles.sql
   - include:
       file: db/changelog/changes/02-seed-roles.sql
+  - include:
+      file: db/changelog/changes/03-create-cars.sql
