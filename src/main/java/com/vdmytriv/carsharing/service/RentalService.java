@@ -41,7 +41,7 @@ public class RentalService {
 
     @Transactional
     public RentalResponse create(String email, RentalCreateRequest request) {
-        Car car = carRepository.findByIdForUpdate(request.carId())
+        Car car = carRepository.findActiveByIdForUpdate(request.carId())
                 .orElseThrow(() -> new ResourceNotFoundException("Car", request.carId()));
         if (car.getInventory() == 0) {
             throw new InvalidRequestException("Car is not available for rental");
@@ -86,6 +86,29 @@ public class RentalService {
                         .orElseThrow(
                                 () -> new ResourceNotFoundException("Rental", rentalId)
                         );
+        return rentalMapper.toResponse(rental);
+    }
+
+    @Transactional
+    public RentalResponse returnRental(String email, Long rentalId) {
+        User currentUser = findUserByEmail(email);
+        Rental rental = rentalRepository.findByIdForUpdate(rentalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental", rentalId));
+        if (currentUser.getRole().getName() != RoleName.MANAGER
+                && !rental.getUser().getId().equals(currentUser.getId())) {
+            throw new ResourceNotFoundException("Rental", rentalId);
+        }
+        if (rental.getActualReturnDate() != null) {
+            throw new InvalidRequestException("Rental has already been returned");
+        }
+
+        Long carId = rental.getCar().getId();
+        Car car = carRepository.findByIdForUpdate(carId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Rental car not found: " + carId
+                ));
+        rental.setActualReturnDate(LocalDate.now());
+        car.setInventory(car.getInventory() + 1);
         return rentalMapper.toResponse(rental);
     }
 

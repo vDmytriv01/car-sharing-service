@@ -245,6 +245,71 @@ class RentalApiIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/rentals/{id}/return", 1))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnRental_AsOwner_ReturnsRentalAndIncreasesInventory()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        Car car = saveCar("Corolla", "Toyota", 0);
+        Rental rental = saveRental(customer, car, null);
+        LocalDate expectedReturnDate = LocalDate.now();
+
+        mockMvc.perform(post("/rentals/{id}/return", rental.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(rental.getId()))
+                .andExpect(jsonPath("$.actualReturnDate")
+                        .value(expectedReturnDate.toString()))
+                .andExpect(jsonPath("$.car.inventory").value(1));
+
+        mockMvc.perform(get("/cars/{id}", car.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inventory").value(1));
+    }
+
+    @Test
+    void returnRental_WhenAlreadyReturned_ReturnsBadRequest()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        Car car = saveCar("Corolla", "Toyota", 1);
+        Rental rental = saveRental(customer, car, LocalDate.now().minusDays(1));
+
+        mockMvc.perform(post("/rentals/{id}/return", rental.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Rental has already been returned"));
+
+        mockMvc.perform(get("/cars/{id}", car.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inventory").value(1));
+    }
+
+    @Test
+    void returnRental_AsDifferentCustomerAndManager_EnforcesAccess()
+            throws Exception {
+        User owner = saveUser("owner@example.com", RoleName.CUSTOMER);
+        User anotherCustomer = saveUser("another@example.com", RoleName.CUSTOMER);
+        User manager = saveUser("manager@example.com", RoleName.MANAGER);
+        Car car = saveCar("Corolla", "Toyota", 0);
+        Rental rental = saveRental(owner, car, null);
+
+        mockMvc.perform(post("/rentals/{id}/return", rental.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(anotherCustomer)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message")
+                        .value("Rental not found: " + rental.getId()));
+
+        mockMvc.perform(post("/rentals/{id}/return", rental.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actualReturnDate")
+                        .value(LocalDate.now().toString()))
+                .andExpect(jsonPath("$.car.inventory").value(1));
     }
 
     @Test

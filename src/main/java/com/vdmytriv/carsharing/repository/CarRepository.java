@@ -19,6 +19,10 @@ public interface CarRepository extends
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT car FROM Car car WHERE car.id = :id AND car.deleted = false")
+    Optional<Car> findActiveByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT car FROM Car car WHERE car.id = :id")
     Optional<Car> findByIdForUpdate(@Param("id") Long id);
 
     Page<Car> findAllByDeletedFalse(Pageable pageable);

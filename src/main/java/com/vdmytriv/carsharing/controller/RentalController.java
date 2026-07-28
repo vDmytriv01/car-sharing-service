@@ -65,4 +65,13 @@ public class RentalController {
     ) {
         return rentalService.findById(principal.getName(), id);
     }
+
+    @Operation(summary = "Return a rented car")
+    @PostMapping("/{id}/return")
+    public RentalResponse returnRental(
+            Principal principal,
+            @PathVariable Long id
+    ) {
+        return rentalService.returnRental(principal.getName(), id);
+    }
 }
