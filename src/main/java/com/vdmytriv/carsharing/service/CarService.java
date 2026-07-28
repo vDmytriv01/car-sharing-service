@@ -12,6 +12,7 @@ import com.vdmytriv.carsharing.mapper.CarMapper;
 import com.vdmytriv.carsharing.model.Car;
 import com.vdmytriv.carsharing.repository.CarRepository;
 import com.vdmytriv.carsharing.repository.CarSpecifications;
+import com.vdmytriv.carsharing.validation.PageableValidator;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CarService {
 
-    private static final int MAX_PAGE_SIZE = 100;
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id",
             "model",
@@ -102,15 +102,6 @@ public class CarService {
                     "Minimum daily fee cannot exceed maximum daily fee"
             );
         }
-        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
-            throw new InvalidRequestException("Page size cannot exceed " + MAX_PAGE_SIZE);
-        }
-        pageable.getSort().forEach(order -> {
-            if (!ALLOWED_SORT_FIELDS.contains(order.getProperty())) {
-                throw new InvalidRequestException(
-                        "Unsupported sort field: " + order.getProperty()
-                );
-            }
-        });
+        PageableValidator.validate(pageable, ALLOWED_SORT_FIELDS);
     }
 }
