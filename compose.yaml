@@ -37,6 +37,7 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       JWT_SECRET: ${JWT_SECRET}
       SPRING_PROFILES_ACTIVE: local
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
     ports:
       - "127.0.0.1:${APP_PORT}:8080"
     healthcheck:

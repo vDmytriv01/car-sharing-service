@@ -35,3 +35,7 @@ security:
     expiration: ${JWT_EXPIRATION:1h}
     issuer: ${JWT_ISSUER:car-sharing-service}
     secret: ${JWT_SECRET}
+
+payment:
+  currency: usd
+  fine-multiplier: 1.50
