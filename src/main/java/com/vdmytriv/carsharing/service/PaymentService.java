@@ -1,25 +1,36 @@
 package com.vdmytriv.carsharing.service;
 
 import com.vdmytriv.carsharing.config.PaymentProperties;
+import com.vdmytriv.carsharing.dto.PageResponse;
+import com.vdmytriv.carsharing.dto.payment.PaymentResponse;
 import com.vdmytriv.carsharing.exception.InvalidRequestException;
 import com.vdmytriv.carsharing.exception.ResourceNotFoundException;
+import com.vdmytriv.carsharing.mapper.PaymentMapper;
 import com.vdmytriv.carsharing.model.Payment;
 import com.vdmytriv.carsharing.model.PaymentStatus;
 import com.vdmytriv.carsharing.model.PaymentType;
 import com.vdmytriv.carsharing.model.Rental;
+import com.vdmytriv.carsharing.model.RoleName;
+import com.vdmytriv.carsharing.model.User;
 import com.vdmytriv.carsharing.payment.CheckoutGateway;
 import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
 import com.vdmytriv.carsharing.repository.PaymentRepository;
 import com.vdmytriv.carsharing.repository.RentalRepository;
+import com.vdmytriv.carsharing.repository.UserRepository;
+import com.vdmytriv.carsharing.validation.PageableValidator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
@@ -27,18 +38,25 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class PaymentService {
 
     private static final long CHECKOUT_QUANTITY = 1L;
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id",
+            "status",
+            "type",
+            "amountToPay"
+    );
 
     private final CheckoutGateway checkoutGateway;
+    private final PaymentMapper paymentMapper;
     private final PaymentRepository paymentRepository;
     private final PaymentProperties paymentProperties;
     private final RentalRepository rentalRepository;
+    private final UserRepository userRepository;
     private final Clock clock;
 
-    public Payment createSession(
+    public PaymentResponse createSession(
             String email,
             Long rentalId,
-            PaymentType type,
-            String baseUrl
+            PaymentType type
     ) {
         Rental rental = rentalRepository.findByIdAndUserEmail(rentalId, email)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental", rentalId));
@@ -49,8 +67,8 @@ public class PaymentService {
                 CHECKOUT_QUANTITY,
                 productName(rentalId, type),
                 email,
-                successUrl(baseUrl),
-                cancelUrl(baseUrl),
+                successUrl(paymentProperties.baseUrl().toString()),
+                cancelUrl(paymentProperties.baseUrl().toString()),
                 Map.of(
                         "rentalId", rentalId.toString(),
                         "paymentType", type.name()
@@ -65,7 +83,24 @@ public class PaymentService {
         payment.setSessionUrl(session.sessionUrl());
         payment.setSessionId(session.sessionId());
         payment.setAmountToPay(amount);
-        return paymentRepository.save(payment);
+        return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<PaymentResponse> findAll(
+            String email,
+            Long requestedUserId,
+            Pageable pageable
+    ) {
+        PageableValidator.validate(pageable, ALLOWED_SORT_FIELDS);
+        User currentUser = findUserByEmail(email);
+        Long userId = currentUser.getRole().getName() == RoleName.MANAGER
+                ? requestedUserId
+                : currentUser.getId();
+        Page<Payment> payments = userId == null
+                ? paymentRepository.findAll(pageable)
+                : paymentRepository.findAllByRentalUserId(userId, pageable);
+        return PageResponse.from(payments.map(paymentMapper::toResponse));
     }
 
     private BigDecimal calculateAmount(Rental rental, PaymentType type) {
@@ -116,5 +151,10 @@ public class PaymentService {
 
     private long toCents(BigDecimal amount) {
         return amount.movePointRight(2).longValueExact();
+    }
+
+    private User findUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", email));
     }
 }

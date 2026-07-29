@@ -8,10 +8,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.vdmytriv.carsharing.config.PaymentProperties;
+import com.vdmytriv.carsharing.dto.payment.PaymentResponse;
 import com.vdmytriv.carsharing.exception.InvalidRequestException;
 import com.vdmytriv.carsharing.exception.ResourceNotFoundException;
+import com.vdmytriv.carsharing.mapper.PaymentMapper;
 import com.vdmytriv.carsharing.model.Car;
-import com.vdmytriv.carsharing.model.Payment;
 import com.vdmytriv.carsharing.model.PaymentStatus;
 import com.vdmytriv.carsharing.model.PaymentType;
 import com.vdmytriv.carsharing.model.Rental;
@@ -21,7 +22,9 @@ import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
 import com.vdmytriv.carsharing.repository.PaymentRepository;
 import com.vdmytriv.carsharing.repository.RentalRepository;
+import com.vdmytriv.carsharing.repository.UserRepository;
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -52,19 +55,25 @@ class PaymentServiceTest {
     @Mock
     private RentalRepository rentalRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
         PaymentProperties properties = new PaymentProperties(
+                URI.create("http://localhost:8080"),
                 "usd",
                 new BigDecimal("1.50")
         );
         paymentService = new PaymentService(
                 checkoutGateway,
+                new PaymentMapper(),
                 paymentRepository,
                 properties,
                 rentalRepository,
+                userRepository,
                 CLOCK
         );
     }
@@ -87,11 +96,10 @@ class PaymentServiceTest {
                 invocation.getArgument(0)
         );
 
-        Payment payment = paymentService.createSession(
+        PaymentResponse payment = paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.PAYMENT,
-                "http://localhost:8080"
+                PaymentType.PAYMENT
         );
 
         ArgumentCaptor<CheckoutSessionRequest> requestCaptor =
@@ -114,15 +122,15 @@ class PaymentServiceTest {
         );
         assertThat(request.cancelUrl())
                 .isEqualTo("http://localhost:8080/payments/cancel");
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(payment.getType()).isEqualTo(PaymentType.PAYMENT);
-        assertThat(payment.getRental()).isSameAs(rental);
-        assertThat(payment.getAmountToPay())
+        assertThat(payment.status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.type()).isEqualTo(PaymentType.PAYMENT);
+        assertThat(payment.rentalId()).isEqualTo(rental.getId());
+        assertThat(payment.amountToPay())
                 .isEqualByComparingTo("149.97");
-        assertThat(payment.getSessionId()).isEqualTo("cs_test_payment");
-        assertThat(payment.getSessionUrl())
+        assertThat(payment.sessionId()).isEqualTo("cs_test_payment");
+        assertThat(payment.sessionUrl())
                 .isEqualTo("https://checkout.stripe.com/c/pay/cs_test_payment");
-        verify(paymentRepository).save(payment);
+        verify(paymentRepository).save(any());
     }
 
     @Test
@@ -143,14 +151,13 @@ class PaymentServiceTest {
                 invocation.getArgument(0)
         );
 
-        Payment payment = paymentService.createSession(
+        PaymentResponse payment = paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.PAYMENT,
-                "https://car-sharing.example"
+                PaymentType.PAYMENT
         );
 
-        assertThat(payment.getAmountToPay())
+        assertThat(payment.amountToPay())
                 .isEqualByComparingTo("49.99");
     }
 
@@ -172,11 +179,10 @@ class PaymentServiceTest {
                 invocation.getArgument(0)
         );
 
-        Payment payment = paymentService.createSession(
+        PaymentResponse payment = paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.FINE,
-                "https://car-sharing.example"
+                PaymentType.FINE
         );
 
         ArgumentCaptor<CheckoutSessionRequest> requestCaptor =
@@ -184,9 +190,9 @@ class PaymentServiceTest {
         verify(checkoutGateway).create(requestCaptor.capture());
         assertThat(requestCaptor.getValue().amountInCents())
                 .isEqualTo(22496L);
-        assertThat(payment.getAmountToPay())
+        assertThat(payment.amountToPay())
                 .isEqualByComparingTo("224.96");
-        assertThat(payment.getType()).isEqualTo(PaymentType.FINE);
+        assertThat(payment.type()).isEqualTo(PaymentType.FINE);
     }
 
     @Test
@@ -207,14 +213,13 @@ class PaymentServiceTest {
                 invocation.getArgument(0)
         );
 
-        Payment payment = paymentService.createSession(
+        PaymentResponse payment = paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.FINE,
-                "https://car-sharing.example"
+                PaymentType.FINE
         );
 
-        assertThat(payment.getAmountToPay())
+        assertThat(payment.amountToPay())
                 .isEqualByComparingTo("299.94");
     }
 
@@ -231,8 +236,7 @@ class PaymentServiceTest {
         assertThatThrownBy(() -> paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.FINE,
-                "https://car-sharing.example"
+                PaymentType.FINE
         ))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessage("Rental is not overdue");
@@ -247,8 +251,7 @@ class PaymentServiceTest {
         assertThatThrownBy(() -> paymentService.createSession(
                 "customer@example.com",
                 17L,
-                PaymentType.PAYMENT,
-                "https://car-sharing.example"
+                PaymentType.PAYMENT
         ))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Rental not found: 17");

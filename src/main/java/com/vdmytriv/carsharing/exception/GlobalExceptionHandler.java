@@ -33,6 +33,14 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
+    @ExceptionHandler(PaymentProviderException.class)
+    public ResponseEntity<ApiErrorResponse> handlePaymentProvider(
+            PaymentProviderException exception,
+            HttpServletRequest request
+    ) {
+        return error(HttpStatus.BAD_GATEWAY, exception.getMessage(), request);
+    }
+
     @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidRequest(
             InvalidRequestException exception,

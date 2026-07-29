@@ -4,5 +4,8 @@ security:
     issuer: car-sharing-service-test
     secret: dGVzdC1qd3Qtc2lnbmluZy1rZXktbXVzdC1iZS0zMi1ieXRlcy1sb25n
 
+payment:
+  base-url: http://localhost:8080
+
 stripe:
   secret-key: sk_test_test

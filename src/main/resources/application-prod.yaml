@@ -4,5 +4,8 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
 
+payment:
+  base-url: ${APP_BASE_URL}
+
 stripe:
   secret-key: ${STRIPE_SECRET_KEY}

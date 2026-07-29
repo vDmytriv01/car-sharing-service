@@ -31,6 +31,7 @@ services:
       mysql:
         condition: service_healthy
     environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}
