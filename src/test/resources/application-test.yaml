@@ -10,3 +10,8 @@ payment:
 stripe:
   secret-key: sk_test_test
   webhook-secret: whsec_test
+
+notification:
+  telegram:
+    bot-token: 123456:test-token
+    chat-id: -1001234567890

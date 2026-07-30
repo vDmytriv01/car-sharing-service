@@ -39,3 +39,7 @@ security:
 payment:
   currency: usd
   fine-multiplier: 1.50
+
+notification:
+  telegram:
+    api-url: https://api.telegram.org
