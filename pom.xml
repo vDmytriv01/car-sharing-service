@@ -6,13 +6,13 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>4.1.0</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath/>
     </parent>
     <groupId>com.vdmytriv</groupId>
     <artifactId>car-sharing-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>Car Sharing Service</name>
-    <description>Portfolio-grade backend service for managing a car-sharing platform</description>
+    <description>Backend service for managing car rentals and payments</description>
     <properties>
         <java.version>21</java.version>
         <maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
@@ -21,6 +21,7 @@
         <jacoco.minimum.line.coverage>0.60</jacoco.minimum.line.coverage>
         <jjwt.version>0.13.0</jjwt.version>
         <springdoc.version>3.0.3</springdoc.version>
+        <stripe.version>33.1.1</stripe.version>
     </properties>
     <dependencies>
         <dependency>
@@ -56,6 +57,11 @@
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
             <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>${stripe.version}</version>
         </dependency>
 
         <dependency>

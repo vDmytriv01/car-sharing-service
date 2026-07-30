@@ -1,5 +1,12 @@
 spring:
   datasource:
-    password: ${DB_PASSWORD:password}
+    password: ${DB_PASSWORD}
     url: ${DB_URL:jdbc:mysql://localhost:3306/car_sharing}
     username: ${DB_USERNAME:car_sharing}
+
+payment:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}

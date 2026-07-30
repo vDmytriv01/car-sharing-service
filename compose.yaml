@@ -31,12 +31,15 @@ services:
       mysql:
         condition: service_healthy
     environment:
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
       DB_USERNAME: ${MYSQL_USER}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       JWT_SECRET: ${JWT_SECRET}
       SPRING_PROFILES_ACTIVE: local
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
     ports:
       - "127.0.0.1:${APP_PORT}:8080"
     healthcheck:

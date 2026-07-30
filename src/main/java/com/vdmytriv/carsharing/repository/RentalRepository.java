@@ -27,6 +27,9 @@ public interface RentalRepository extends
     @EntityGraph(attributePaths = "car")
     Optional<Rental> findByIdAndUserId(Long id, Long userId);
 
+    @EntityGraph(attributePaths = {"car", "user"})
+    Optional<Rental> findByIdAndUserEmail(Long id, String email);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT rental FROM Rental rental WHERE rental.id = :id")
     Optional<Rental> findByIdForUpdate(@Param("id") Long id);
