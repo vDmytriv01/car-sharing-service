@@ -280,6 +280,58 @@ class PaymentApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void paymentSuccess_WithPaidStripeSession_ReturnsConfirmation()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        savePayment(saveRental(customer), "cs_test_success");
+        when(checkoutGateway.isPaid("cs_test_success")).thenReturn(true);
+
+        mockMvc.perform(get("/payments/success")
+                        .param("session_id", "cs_test_success"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Payment completed successfully"));
+
+        verify(checkoutGateway).isPaid("cs_test_success");
+    }
+
+    @Test
+    void paymentSuccess_WithUnpaidStripeSession_ReturnsBadRequest()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        savePayment(saveRental(customer), "cs_test_unpaid");
+        when(checkoutGateway.isPaid("cs_test_unpaid")).thenReturn(false);
+
+        mockMvc.perform(get("/payments/success")
+                        .param("session_id", "cs_test_unpaid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Payment has not been completed"));
+    }
+
+    @Test
+    void paymentCancel_WithoutAuthentication_ReturnsInformation()
+            throws Exception {
+        mockMvc.perform(get("/payments/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(
+                        "Payment was cancelled. You can try again later"
+                ));
+    }
+
+    @Test
+    void stripeWebhook_WithInvalidSignature_ReturnsBadRequest()
+            throws Exception {
+        mockMvc.perform(post("/payments/webhook")
+                        .header("Stripe-Signature", "t=1,v1=invalid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Invalid Stripe webhook signature"));
+    }
+
     private String bearer(User user) {
         return "Bearer " + jwtService.generateToken(user.getEmail());
     }

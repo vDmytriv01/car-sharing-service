@@ -86,6 +86,32 @@ public class PaymentService {
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
 
+    public void confirmPayment(String sessionId) {
+        Payment payment = paymentRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Payment session",
+                        sessionId
+                ));
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            return;
+        }
+        if (!checkoutGateway.isPaid(sessionId)) {
+            throw new InvalidRequestException("Payment has not been completed");
+        }
+        markPaid(sessionId);
+    }
+
+    public void markPaid(String sessionId) {
+        int updatedPayments = paymentRepository.markPaid(sessionId);
+        if (updatedPayments == 0
+                && !paymentRepository.existsBySessionId(sessionId)) {
+            throw new ResourceNotFoundException(
+                    "Payment session",
+                    sessionId
+            );
+        }
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<PaymentResponse> findAll(
             String email,

@@ -13,6 +13,7 @@ import com.vdmytriv.carsharing.exception.InvalidRequestException;
 import com.vdmytriv.carsharing.exception.ResourceNotFoundException;
 import com.vdmytriv.carsharing.mapper.PaymentMapper;
 import com.vdmytriv.carsharing.model.Car;
+import com.vdmytriv.carsharing.model.Payment;
 import com.vdmytriv.carsharing.model.PaymentStatus;
 import com.vdmytriv.carsharing.model.PaymentType;
 import com.vdmytriv.carsharing.model.Rental;
@@ -256,6 +257,87 @@ class PaymentServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Rental not found: 17");
         verifyNoInteractions(checkoutGateway, paymentRepository);
+    }
+
+    @Test
+    void confirmPayment_WhenStripeSessionIsPaid_UpdatesPaymentStatus() {
+        Payment payment = payment(PaymentStatus.PENDING);
+        when(paymentRepository.findBySessionId("cs_test_payment"))
+                .thenReturn(Optional.of(payment));
+        when(checkoutGateway.isPaid("cs_test_payment")).thenReturn(true);
+        when(paymentRepository.markPaid("cs_test_payment")).thenReturn(1);
+
+        paymentService.confirmPayment("cs_test_payment");
+
+        verify(paymentRepository).markPaid("cs_test_payment");
+    }
+
+    @Test
+    void confirmPayment_WhenStripeSessionIsUnpaid_RejectsUpdate() {
+        Payment payment = payment(PaymentStatus.PENDING);
+        when(paymentRepository.findBySessionId("cs_test_payment"))
+                .thenReturn(Optional.of(payment));
+        when(checkoutGateway.isPaid("cs_test_payment")).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                paymentService.confirmPayment("cs_test_payment"))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Payment has not been completed");
+        verify(paymentRepository).findBySessionId("cs_test_payment");
+    }
+
+    @Test
+    void confirmPayment_WhenPaymentIsAlreadyPaid_SkipsStripeRequest() {
+        Payment payment = payment(PaymentStatus.PAID);
+        when(paymentRepository.findBySessionId("cs_test_payment"))
+                .thenReturn(Optional.of(payment));
+
+        paymentService.confirmPayment("cs_test_payment");
+
+        verifyNoInteractions(checkoutGateway);
+        verify(paymentRepository).findBySessionId("cs_test_payment");
+    }
+
+    @Test
+    void confirmPayment_WhenSessionDoesNotExist_SkipsStripeRequest() {
+        when(paymentRepository.findBySessionId("cs_test_missing"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                paymentService.confirmPayment("cs_test_missing"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Payment session not found: cs_test_missing");
+        verifyNoInteractions(checkoutGateway);
+    }
+
+    @Test
+    void markPaid_WhenPaymentIsAlreadyPaid_DoesNotSaveAgain() {
+        when(paymentRepository.markPaid("cs_test_payment")).thenReturn(0);
+        when(paymentRepository.existsBySessionId("cs_test_payment"))
+                .thenReturn(true);
+
+        paymentService.markPaid("cs_test_payment");
+
+        verify(paymentRepository).markPaid("cs_test_payment");
+        verify(paymentRepository).existsBySessionId("cs_test_payment");
+    }
+
+    @Test
+    void markPaid_WhenSessionDoesNotExist_ReturnsNotFound() {
+        when(paymentRepository.markPaid("cs_test_missing")).thenReturn(0);
+        when(paymentRepository.existsBySessionId("cs_test_missing"))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> paymentService.markPaid("cs_test_missing"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Payment session not found: cs_test_missing");
+    }
+
+    private Payment payment(PaymentStatus status) {
+        Payment payment = new Payment();
+        payment.setStatus(status);
+        payment.setSessionId("cs_test_payment");
+        return payment;
     }
 
     private Rental rental(

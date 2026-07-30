@@ -39,6 +39,22 @@ public class StripeCheckoutGateway implements CheckoutGateway {
         }
     }
 
+    @Override
+    public boolean isPaid(String sessionId) {
+        try {
+            Session session = stripeClient.v1()
+                    .checkout()
+                    .sessions()
+                    .retrieve(sessionId);
+            return "paid".equals(session.getPaymentStatus());
+        } catch (StripeException exception) {
+            throw new PaymentProviderException(
+                    "Could not verify Stripe checkout session",
+                    exception
+            );
+        }
+    }
+
     private SessionCreateParams buildParams(CheckoutSessionRequest request) {
         SessionCreateParams.LineItem.PriceData.ProductData productData =
                 SessionCreateParams.LineItem.PriceData.ProductData.builder()

@@ -6,6 +6,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -16,5 +20,17 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @EntityGraph(attributePaths = {"rental", "rental.user"})
     Page<Payment> findAllByRentalUserId(Long userId, Pageable pageable);
 
+    boolean existsBySessionId(String sessionId);
+
     Optional<Payment> findBySessionId(String sessionId);
+
+    @Modifying
+    @Transactional
+    @Query("""
+            UPDATE Payment payment
+            SET payment.status = com.vdmytriv.carsharing.model.PaymentStatus.PAID
+            WHERE payment.sessionId = :sessionId
+              AND payment.status = com.vdmytriv.carsharing.model.PaymentStatus.PENDING
+            """)
+    int markPaid(@Param("sessionId") String sessionId);
 }

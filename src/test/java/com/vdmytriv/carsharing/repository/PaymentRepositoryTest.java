@@ -93,6 +93,27 @@ class PaymentRepositoryTest {
         ))).isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void markPaid_WhenCalledTwice_UpdatesPendingPaymentOnce() {
+        Payment payment = createPayment(
+                saveRental(),
+                "cs_test_paid",
+                new BigDecimal("49.99")
+        );
+        paymentRepository.saveAndFlush(payment);
+
+        int firstUpdate = paymentRepository.markPaid("cs_test_paid");
+        int secondUpdate = paymentRepository.markPaid("cs_test_paid");
+        entityManager.clear();
+
+        assertThat(firstUpdate).isOne();
+        assertThat(secondUpdate).isZero();
+        assertThat(paymentRepository.findBySessionId("cs_test_paid"))
+                .get()
+                .extracting(Payment::getStatus)
+                .isEqualTo(PaymentStatus.PAID);
+    }
+
     @ParameterizedTest
     @MethodSource("nonPositiveAmounts")
     void save_WithNonPositiveAmount_IsRejectedByDatabase(BigDecimal amount) {

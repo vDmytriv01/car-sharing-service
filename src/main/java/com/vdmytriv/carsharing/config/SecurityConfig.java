@@ -49,7 +49,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(ERROR).permitAll()
                         .requestMatchers(HttpMethod.POST, "/register", "/login").permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/payments/webhook"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/cars", "/cars/**").permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/payments/success",
+                                "/payments/cancel"
+                        ).permitAll()
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/health/**",

@@ -94,6 +94,24 @@ class StripeCheckoutGatewayTest {
                 .hasMessage("Stripe returned an incomplete checkout session");
     }
 
+    @Test
+    void isPaid_WhenStripeSessionIsPaid_ReturnsTrue() throws StripeException {
+        Session session = new Session();
+        session.setPaymentStatus("paid");
+        when(sessionService.retrieve("cs_test_paid")).thenReturn(session);
+
+        assertThat(gateway.isPaid("cs_test_paid")).isTrue();
+    }
+
+    @Test
+    void isPaid_WhenStripeSessionIsUnpaid_ReturnsFalse() throws StripeException {
+        Session session = new Session();
+        session.setPaymentStatus("unpaid");
+        when(sessionService.retrieve("cs_test_unpaid")).thenReturn(session);
+
+        assertThat(gateway.isPaid("cs_test_unpaid")).isFalse();
+    }
+
     private CheckoutSessionRequest request() {
         return new CheckoutSessionRequest(
                 14997L,
