@@ -4,5 +4,9 @@ public interface CheckoutGateway {
 
     CheckoutSessionResult create(CheckoutSessionRequest request);
 
-    boolean isPaid(String sessionId);
+    CheckoutSessionStatus getStatus(String sessionId);
+
+    default boolean isPaid(String sessionId) {
+        return getStatus(sessionId) == CheckoutSessionStatus.PAID;
+    }
 }

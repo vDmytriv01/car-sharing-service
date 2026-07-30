@@ -10,7 +10,8 @@ public record CheckoutSessionRequest(
         String customerEmail,
         String successUrl,
         String cancelUrl,
-        Map<String, String> metadata
+        Map<String, String> metadata,
+        String idempotencyKey
 ) {
 
     public CheckoutSessionRequest {

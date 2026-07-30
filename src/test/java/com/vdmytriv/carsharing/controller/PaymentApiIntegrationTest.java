@@ -2,7 +2,9 @@ package com.vdmytriv.carsharing.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -23,6 +25,7 @@ import com.vdmytriv.carsharing.model.User;
 import com.vdmytriv.carsharing.payment.CheckoutGateway;
 import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
+import com.vdmytriv.carsharing.payment.CheckoutSessionStatus;
 import com.vdmytriv.carsharing.repository.CarRepository;
 import com.vdmytriv.carsharing.repository.PaymentRepository;
 import com.vdmytriv.carsharing.repository.RentalRepository;
@@ -148,6 +151,66 @@ class PaymentApiIntegrationTest {
                 .andExpect(jsonPath("$.message")
                         .value("Could not create Stripe checkout session"))
                 .andExpect(jsonPath("$.path").value("/payments"));
+    }
+
+    @Test
+    void createPayment_WhenPendingPaymentExists_ReturnsExistingPayment()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        Rental rental = saveRental(customer);
+        Payment existingPayment = savePayment(
+                rental,
+                "cs_test_existing"
+        );
+        when(checkoutGateway.getStatus("cs_test_existing"))
+                .thenReturn(CheckoutSessionStatus.OPEN);
+
+        mockMvc.perform(post("/payments")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rentalId": %d,
+                                  "type": "PAYMENT"
+                                }
+                                """.formatted(rental.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(existingPayment.getId()))
+                .andExpect(jsonPath("$.sessionId")
+                        .value("cs_test_existing"))
+                .andExpect(jsonPath("$.sessionUrl").value(
+                        "https://checkout.stripe.com/c/pay/cs_test_existing"
+                ));
+
+        verify(checkoutGateway, never()).create(any());
+    }
+
+    @Test
+    void createPayment_WhenPaymentIsAlreadyPaid_ReturnsBadRequest()
+            throws Exception {
+        User customer = saveUser("customer@example.com", RoleName.CUSTOMER);
+        Rental rental = saveRental(customer);
+        Payment existingPayment = savePayment(
+                rental,
+                "cs_test_paid"
+        );
+        existingPayment.setStatus(PaymentStatus.PAID);
+        paymentRepository.saveAndFlush(existingPayment);
+
+        mockMvc.perform(post("/payments")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "rentalId": %d,
+                                  "type": "PAYMENT"
+                                }
+                                """.formatted(rental.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Payment has already been completed"));
+
+        verifyNoInteractions(checkoutGateway);
     }
 
     @Test
@@ -316,7 +379,8 @@ class PaymentApiIntegrationTest {
         mockMvc.perform(get("/payments/cancel"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value(
-                        "Payment was cancelled. You can try again later"
+                        "Payment was cancelled. "
+                                + "You can complete it within 24 hours"
                 ));
     }
 

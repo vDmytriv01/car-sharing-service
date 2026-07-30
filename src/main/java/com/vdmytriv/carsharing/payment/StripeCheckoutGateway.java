@@ -3,6 +3,7 @@ package com.vdmytriv.carsharing.payment;
 import com.stripe.StripeClient;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.vdmytriv.carsharing.exception.PaymentProviderException;
 import lombok.RequiredArgsConstructor;
@@ -17,11 +18,14 @@ public class StripeCheckoutGateway implements CheckoutGateway {
     @Override
     public CheckoutSessionResult create(CheckoutSessionRequest request) {
         SessionCreateParams params = buildParams(request);
+        RequestOptions options = RequestOptions.builder()
+                .setIdempotencyKey(request.idempotencyKey())
+                .build();
         try {
             Session session = stripeClient.v1()
                     .checkout()
                     .sessions()
-                    .create(params);
+                    .create(params, options);
             if (session.getId() == null || session.getUrl() == null) {
                 throw new PaymentProviderException(
                         "Stripe returned an incomplete checkout session"
@@ -40,13 +44,22 @@ public class StripeCheckoutGateway implements CheckoutGateway {
     }
 
     @Override
-    public boolean isPaid(String sessionId) {
+    public CheckoutSessionStatus getStatus(String sessionId) {
         try {
             Session session = stripeClient.v1()
                     .checkout()
                     .sessions()
                     .retrieve(sessionId);
-            return "paid".equals(session.getPaymentStatus());
+            if ("paid".equals(session.getPaymentStatus())) {
+                return CheckoutSessionStatus.PAID;
+            }
+            if ("open".equals(session.getStatus())) {
+                return CheckoutSessionStatus.OPEN;
+            }
+            if ("expired".equals(session.getStatus())) {
+                return CheckoutSessionStatus.EXPIRED;
+            }
+            return CheckoutSessionStatus.PROCESSING;
         } catch (StripeException exception) {
             throw new PaymentProviderException(
                     "Could not verify Stripe checkout session",

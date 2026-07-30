@@ -1,6 +1,7 @@
 package com.vdmytriv.carsharing.repository;
 
 import com.vdmytriv.carsharing.model.Payment;
+import com.vdmytriv.carsharing.model.PaymentType;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,12 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Page<Payment> findAllByRentalUserId(Long userId, Pageable pageable);
 
     boolean existsBySessionId(String sessionId);
+
+    @EntityGraph(attributePaths = {"rental", "rental.user"})
+    Optional<Payment> findByRentalIdAndType(
+            Long rentalId,
+            PaymentType type
+    );
 
     Optional<Payment> findBySessionId(String sessionId);
 

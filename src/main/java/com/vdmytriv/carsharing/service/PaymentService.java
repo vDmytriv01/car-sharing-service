@@ -15,18 +15,18 @@ import com.vdmytriv.carsharing.model.User;
 import com.vdmytriv.carsharing.payment.CheckoutGateway;
 import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
+import com.vdmytriv.carsharing.payment.CheckoutSessionStatus;
 import com.vdmytriv.carsharing.repository.PaymentRepository;
 import com.vdmytriv.carsharing.repository.RentalRepository;
 import com.vdmytriv.carsharing.repository.UserRepository;
 import com.vdmytriv.carsharing.validation.PageableValidator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Clock;
-import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -51,7 +51,6 @@ public class PaymentService {
     private final PaymentProperties paymentProperties;
     private final RentalRepository rentalRepository;
     private final UserRepository userRepository;
-    private final Clock clock;
 
     public PaymentResponse createSession(
             String email,
@@ -61,6 +60,29 @@ public class PaymentService {
         Rental rental = rentalRepository.findByIdAndUserEmail(rentalId, email)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental", rentalId));
         BigDecimal amount = calculateAmount(rental, type);
+        Payment existingPayment = paymentRepository.findByRentalIdAndType(
+                rentalId,
+                type
+        ).orElse(null);
+        if (existingPayment != null) {
+            if (existingPayment.getStatus() == PaymentStatus.PAID) {
+                throw new InvalidRequestException(
+                        "Payment has already been completed"
+                );
+            }
+            CheckoutSessionStatus sessionStatus = checkoutGateway.getStatus(
+                    existingPayment.getSessionId()
+            );
+            if (sessionStatus == CheckoutSessionStatus.PAID) {
+                markPaid(existingPayment.getSessionId());
+                throw new InvalidRequestException(
+                        "Payment has already been completed"
+                );
+            }
+            if (sessionStatus != CheckoutSessionStatus.EXPIRED) {
+                return paymentMapper.toResponse(existingPayment);
+            }
+        }
         CheckoutSessionRequest request = new CheckoutSessionRequest(
                 toCents(amount),
                 paymentProperties.currency(),
@@ -72,18 +94,21 @@ public class PaymentService {
                 Map.of(
                         "rentalId", rentalId.toString(),
                         "paymentType", type.name()
-                )
+                ),
+                idempotencyKey(rentalId, type, existingPayment)
         );
         CheckoutSessionResult session = checkoutGateway.create(request);
 
-        Payment payment = new Payment();
+        Payment payment = existingPayment == null
+                ? new Payment()
+                : existingPayment;
         payment.setStatus(PaymentStatus.PENDING);
         payment.setType(type);
         payment.setRental(rental);
         payment.setSessionUrl(session.sessionUrl());
         payment.setSessionId(session.sessionId());
         payment.setAmountToPay(amount);
-        return paymentMapper.toResponse(paymentRepository.save(payment));
+        return savePayment(payment, existingPayment == null);
     }
 
     public void confirmPayment(String sessionId) {
@@ -131,12 +156,14 @@ public class PaymentService {
 
     private BigDecimal calculateAmount(Rental rental, PaymentType type) {
         if (type == PaymentType.FINE) {
-            LocalDate fineEndDate = rental.getActualReturnDate() == null
-                    ? LocalDate.now(clock)
-                    : rental.getActualReturnDate();
+            if (rental.getActualReturnDate() == null) {
+                throw new InvalidRequestException(
+                        "Rental must be returned before paying a fine"
+                );
+            }
             long overdueDays = ChronoUnit.DAYS.between(
                     rental.getReturnDate(),
-                    fineEndDate
+                    rental.getActualReturnDate()
             );
             if (overdueDays <= 0) {
                 throw new InvalidRequestException("Rental is not overdue");
@@ -165,6 +192,41 @@ public class PaymentService {
     private String productName(Long rentalId, PaymentType type) {
         return "Car rental " + type.name().toLowerCase()
                 + " #" + rentalId;
+    }
+
+    private PaymentResponse savePayment(Payment payment, boolean isNew) {
+        try {
+            return paymentMapper.toResponse(paymentRepository.save(payment));
+        } catch (DataIntegrityViolationException exception) {
+            if (!isNew) {
+                throw exception;
+            }
+            return paymentRepository.findByRentalIdAndType(
+                            payment.getRental().getId(),
+                            payment.getType()
+                    )
+                    .map(savedPayment -> {
+                        if (savedPayment.getStatus() == PaymentStatus.PAID) {
+                            throw new InvalidRequestException(
+                                    "Payment has already been completed"
+                            );
+                        }
+                        return paymentMapper.toResponse(savedPayment);
+                    })
+                    .orElseThrow(() -> exception);
+        }
+    }
+
+    private String idempotencyKey(
+            Long rentalId,
+            PaymentType type,
+            Payment existingPayment
+    ) {
+        if (existingPayment != null) {
+            return "renew-" + existingPayment.getSessionId();
+        }
+        return "rental-" + rentalId + "-"
+                + type.name().toLowerCase();
     }
 
     private String successUrl(String baseUrl) {

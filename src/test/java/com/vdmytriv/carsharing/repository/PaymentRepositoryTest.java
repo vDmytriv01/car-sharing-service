@@ -94,6 +94,22 @@ class PaymentRepositoryTest {
     }
 
     @Test
+    void save_WithSameRentalAndType_IsRejectedByDatabase() {
+        Rental rental = saveRental();
+        paymentRepository.saveAndFlush(createPayment(
+                rental,
+                "cs_test_first",
+                new BigDecimal("49.99")
+        ));
+
+        assertThatThrownBy(() -> paymentRepository.saveAndFlush(createPayment(
+                rental,
+                "cs_test_second",
+                new BigDecimal("49.99")
+        ))).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void markPaid_WhenCalledTwice_UpdatesPendingPaymentOnce() {
         Payment payment = createPayment(
                 saveRental(),

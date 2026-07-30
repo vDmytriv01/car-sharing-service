@@ -7,8 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.stripe.StripeClient;
+import com.stripe.exception.ApiException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.checkout.Session;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.checkout.SessionCreateParams;
 import com.stripe.service.CheckoutService;
 import com.stripe.service.V1Services;
@@ -52,7 +54,10 @@ class StripeCheckoutGatewayTest {
         stripeSession.setUrl(
                 "https://checkout.stripe.com/c/pay/cs_test_gateway"
         );
-        when(sessionService.create(any(SessionCreateParams.class)))
+        when(sessionService.create(
+                any(SessionCreateParams.class),
+                any(RequestOptions.class)
+        ))
                 .thenReturn(stripeSession);
         CheckoutSessionRequest request = request();
 
@@ -63,7 +68,12 @@ class StripeCheckoutGatewayTest {
 
         ArgumentCaptor<SessionCreateParams> captor =
                 ArgumentCaptor.forClass(SessionCreateParams.class);
-        verify(sessionService).create(captor.capture());
+        ArgumentCaptor<RequestOptions> optionsCaptor =
+                ArgumentCaptor.forClass(RequestOptions.class);
+        verify(sessionService).create(
+                captor.capture(),
+                optionsCaptor.capture()
+        );
         SessionCreateParams params = captor.getValue();
 
         assertThat(params.getMode()).isEqualTo(SessionCreateParams.Mode.PAYMENT);
@@ -71,6 +81,8 @@ class StripeCheckoutGatewayTest {
         assertThat(params.getSuccessUrl()).isEqualTo(request.successUrl());
         assertThat(params.getCancelUrl()).isEqualTo(request.cancelUrl());
         assertThat(params.getMetadata()).isEqualTo(request.metadata());
+        assertThat(optionsCaptor.getValue().getIdempotencyKey())
+                .isEqualTo("rental-17-payment");
 
         SessionCreateParams.LineItem lineItem =
                 params.getLineItems().getFirst();
@@ -86,12 +98,30 @@ class StripeCheckoutGatewayTest {
             throws StripeException {
         Session incompleteSession = new Session();
         incompleteSession.setId("cs_test_incomplete");
-        when(sessionService.create(any(SessionCreateParams.class)))
+        when(sessionService.create(
+                any(SessionCreateParams.class),
+                any(RequestOptions.class)
+        ))
                 .thenReturn(incompleteSession);
 
         assertThatThrownBy(() -> gateway.create(request()))
                 .isInstanceOf(PaymentProviderException.class)
                 .hasMessage("Stripe returned an incomplete checkout session");
+    }
+
+    @Test
+    void create_WhenStripeThrows_ThrowsPaymentProviderException()
+            throws StripeException {
+        StripeException stripeException = stripeException();
+        when(sessionService.create(
+                any(SessionCreateParams.class),
+                any(RequestOptions.class)
+        )).thenThrow(stripeException);
+
+        assertThatThrownBy(() -> gateway.create(request()))
+                .isInstanceOf(PaymentProviderException.class)
+                .hasMessage("Could not create Stripe checkout session")
+                .hasCause(stripeException);
     }
 
     @Test
@@ -112,6 +142,53 @@ class StripeCheckoutGatewayTest {
         assertThat(gateway.isPaid("cs_test_unpaid")).isFalse();
     }
 
+    @Test
+    void getStatus_WhenStripeSessionIsOpen_ReturnsOpen()
+            throws StripeException {
+        Session session = new Session();
+        session.setPaymentStatus("unpaid");
+        session.setStatus("open");
+        when(sessionService.retrieve("cs_test_open")).thenReturn(session);
+
+        assertThat(gateway.getStatus("cs_test_open"))
+                .isEqualTo(CheckoutSessionStatus.OPEN);
+    }
+
+    @Test
+    void getStatus_WhenStripeSessionExpired_ReturnsExpired()
+            throws StripeException {
+        Session session = new Session();
+        session.setPaymentStatus("unpaid");
+        session.setStatus("expired");
+        when(sessionService.retrieve("cs_test_expired")).thenReturn(session);
+
+        assertThat(gateway.getStatus("cs_test_expired"))
+                .isEqualTo(CheckoutSessionStatus.EXPIRED);
+    }
+
+    @Test
+    void isPaid_WhenStripeThrows_ThrowsPaymentProviderException()
+            throws StripeException {
+        StripeException stripeException = stripeException();
+        when(sessionService.retrieve("cs_test_error"))
+                .thenThrow(stripeException);
+
+        assertThatThrownBy(() -> gateway.isPaid("cs_test_error"))
+                .isInstanceOf(PaymentProviderException.class)
+                .hasMessage("Could not verify Stripe checkout session")
+                .hasCause(stripeException);
+    }
+
+    private StripeException stripeException() {
+        return new ApiException(
+                "Stripe is unavailable",
+                null,
+                "req_test",
+                503,
+                null
+        );
+    }
+
     private CheckoutSessionRequest request() {
         return new CheckoutSessionRequest(
                 14997L,
@@ -125,7 +202,8 @@ class StripeCheckoutGatewayTest {
                 Map.of(
                         "rentalId", "17",
                         "paymentType", "PAYMENT"
-                )
+                ),
+                "rental-17-payment"
         );
     }
 }

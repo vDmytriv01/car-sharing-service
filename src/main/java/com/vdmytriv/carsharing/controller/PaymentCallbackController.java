@@ -31,7 +31,7 @@ public class PaymentCallbackController {
     @GetMapping("/cancel")
     public PaymentMessageResponse cancel() {
         return new PaymentMessageResponse(
-                "Payment was cancelled. You can try again later"
+                "Payment was cancelled. You can complete it within 24 hours"
         );
     }
 }

@@ -48,7 +48,8 @@ class StripeWebhookServiceTest {
     }
 
     @Test
-    void handle_WhenEventIsDeliveredTwice_RemainsSafe() throws Exception {
+    void handle_WhenEventIsDeliveredTwice_DelegatesBothEvents()
+            throws Exception {
         String payload = eventPayload("paid");
         String signature = signature(payload);
 
