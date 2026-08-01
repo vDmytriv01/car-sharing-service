@@ -10,6 +10,7 @@ import com.vdmytriv.carsharing.model.Car;
 import com.vdmytriv.carsharing.model.Rental;
 import com.vdmytriv.carsharing.model.RoleName;
 import com.vdmytriv.carsharing.model.User;
+import com.vdmytriv.carsharing.notification.RentalCreatedEvent;
 import com.vdmytriv.carsharing.repository.CarRepository;
 import com.vdmytriv.carsharing.repository.RentalRepository;
 import com.vdmytriv.carsharing.repository.RentalSpecifications;
@@ -18,6 +19,7 @@ import com.vdmytriv.carsharing.validation.PageableValidator;
 import java.time.LocalDate;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class RentalService {
     private final RentalMapper rentalMapper;
     private final RentalRepository rentalRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public RentalResponse create(String email, RentalCreateRequest request) {
@@ -54,7 +57,11 @@ public class RentalService {
         rental.setReturnDate(request.returnDate());
         rental.setCar(car);
         rental.setUser(user);
-        return rentalMapper.toResponse(rentalRepository.save(rental));
+        Rental savedRental = rentalRepository.save(rental);
+        eventPublisher.publishEvent(new RentalCreatedEvent(
+                savedRental.getId()
+        ));
+        return rentalMapper.toResponse(savedRental);
     }
 
     @Transactional(readOnly = true)

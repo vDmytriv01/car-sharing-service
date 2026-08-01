@@ -12,6 +12,7 @@ import com.vdmytriv.carsharing.model.PaymentType;
 import com.vdmytriv.carsharing.model.Rental;
 import com.vdmytriv.carsharing.model.RoleName;
 import com.vdmytriv.carsharing.model.User;
+import com.vdmytriv.carsharing.notification.PaymentCompletedEvent;
 import com.vdmytriv.carsharing.payment.CheckoutGateway;
 import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
@@ -26,6 +27,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -51,6 +53,7 @@ public class PaymentService {
     private final PaymentProperties paymentProperties;
     private final RentalRepository rentalRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentResponse createSession(
             String email,
@@ -128,6 +131,10 @@ public class PaymentService {
 
     public void markPaid(String sessionId) {
         int updatedPayments = paymentRepository.markPaid(sessionId);
+        if (updatedPayments == 1) {
+            eventPublisher.publishEvent(new PaymentCompletedEvent(sessionId));
+            return;
+        }
         if (updatedPayments == 0
                 && !paymentRepository.existsBySessionId(sessionId)) {
             throw new ResourceNotFoundException(

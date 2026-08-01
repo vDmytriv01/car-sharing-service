@@ -21,7 +21,7 @@ public interface RentalRepository extends
     Page<Rental> findAll(Specification<Rental> specification, Pageable pageable);
 
     @Override
-    @EntityGraph(attributePaths = "car")
+    @EntityGraph(attributePaths = {"car", "user"})
     Optional<Rental> findById(Long id);
 
     @EntityGraph(attributePaths = "car")
