@@ -13,6 +13,7 @@ import com.vdmytriv.carsharing.model.User;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -73,6 +74,40 @@ class RentalRepositoryTest {
                 .isPresent();
         assertThat(rentalRepository.findByIdAndUserId(rental.getId(), otherUser.getId()))
                 .isEmpty();
+    }
+
+    @Test
+    void findOverdueRentals_ReturnsUnreturnedRentalsDueByTomorrow() {
+        User user = saveUser("customer@example.com");
+        Car car = saveCar();
+        LocalDate cutoffDate = LocalDate.of(2026, 8, 2);
+        Rental overdueRental = createRental(user, car);
+        overdueRental.setReturnDate(cutoffDate.minusDays(1));
+        Rental dueTomorrow = createRental(user, car);
+        dueTomorrow.setReturnDate(cutoffDate);
+        Rental futureRental = createRental(user, car);
+        futureRental.setReturnDate(cutoffDate.plusDays(1));
+        Rental returnedRental = createRental(user, car);
+        returnedRental.setReturnDate(cutoffDate.minusDays(1));
+        returnedRental.setActualReturnDate(cutoffDate.minusDays(1));
+        rentalRepository.saveAllAndFlush(List.of(
+                overdueRental,
+                dueTomorrow,
+                futureRental,
+                returnedRental
+        ));
+
+        List<Rental> rentals = rentalRepository
+                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+                        cutoffDate
+                );
+
+        assertThat(rentals)
+                .extracting(Rental::getId)
+                .containsExactlyInAnyOrder(
+                        overdueRental.getId(),
+                        dueTomorrow.getId()
+                );
     }
 
     @ParameterizedTest

@@ -43,3 +43,6 @@ payment:
 notification:
   telegram:
     api-url: https://api.telegram.org
+  overdue-rentals:
+    cron: ${OVERDUE_NOTIFICATION_CRON:0 0 9 * * *}
+    zone: ${OVERDUE_NOTIFICATION_ZONE:UTC}
