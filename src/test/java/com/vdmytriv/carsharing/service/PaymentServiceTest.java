@@ -21,6 +21,7 @@ import com.vdmytriv.carsharing.model.PaymentStatus;
 import com.vdmytriv.carsharing.model.PaymentType;
 import com.vdmytriv.carsharing.model.Rental;
 import com.vdmytriv.carsharing.model.User;
+import com.vdmytriv.carsharing.notification.PaymentCompletedEvent;
 import com.vdmytriv.carsharing.payment.CheckoutGateway;
 import com.vdmytriv.carsharing.payment.CheckoutSessionRequest;
 import com.vdmytriv.carsharing.payment.CheckoutSessionResult;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +58,9 @@ class PaymentServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private PaymentService paymentService;
 
     @BeforeEach
@@ -71,7 +76,8 @@ class PaymentServiceTest {
                 paymentRepository,
                 properties,
                 rentalRepository,
-                userRepository
+                userRepository,
+                eventPublisher
         );
     }
 
@@ -512,6 +518,20 @@ class PaymentServiceTest {
 
         verify(paymentRepository).markPaid("cs_test_payment");
         verify(paymentRepository).existsBySessionId("cs_test_payment");
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void markPaid_WhenPendingPaymentIsUpdated_PublishesCompletedEvent() {
+        when(paymentRepository.markPaid("cs_test_payment")).thenReturn(1);
+
+        paymentService.markPaid("cs_test_payment");
+
+        ArgumentCaptor<PaymentCompletedEvent> eventCaptor =
+                ArgumentCaptor.forClass(PaymentCompletedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().sessionId())
+                .isEqualTo("cs_test_payment");
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.vdmytriv.carsharing.repository;
 
 import com.vdmytriv.carsharing.model.Rental;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,7 +23,7 @@ public interface RentalRepository extends
     Page<Rental> findAll(Specification<Rental> specification, Pageable pageable);
 
     @Override
-    @EntityGraph(attributePaths = "car")
+    @EntityGraph(attributePaths = {"car", "user"})
     Optional<Rental> findById(Long id);
 
     @EntityGraph(attributePaths = "car")
@@ -29,6 +31,11 @@ public interface RentalRepository extends
 
     @EntityGraph(attributePaths = {"car", "user"})
     Optional<Rental> findByIdAndUserEmail(Long id, String email);
+
+    @EntityGraph(attributePaths = {"car", "user"})
+    List<Rental> findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+            LocalDate returnDate
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT rental FROM Rental rental WHERE rental.id = :id")

@@ -29,6 +29,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             PaymentType type
     );
 
+    @EntityGraph(attributePaths = {"rental", "rental.user"})
     Optional<Payment> findBySessionId(String sessionId);
 
     @Modifying
