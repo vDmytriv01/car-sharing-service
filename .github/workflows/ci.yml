@@ -34,3 +34,19 @@ jobs:
 
       - name: Verify project
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
+
+  docker:
+    name: Build Docker image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate Docker Compose configuration
+        run: docker compose --env-file .env.sample config --quiet
+
+      - name: Build Docker image
+        run: docker build --tag car-sharing-service:ci .
