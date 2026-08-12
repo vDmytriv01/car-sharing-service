@@ -27,7 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OverdueRentalNotificationSchedulerTest {
 
-    private static final LocalDate CUTOFF_DATE = LocalDate.of(2026, 8, 2);
+    private static final LocalDate TODAY = LocalDate.of(2026, 8, 1);
 
     @Mock
     private NotificationService notificationService;
@@ -57,16 +57,11 @@ class OverdueRentalNotificationSchedulerTest {
                 LocalDate.of(2026, 7, 28),
                 LocalDate.of(2026, 7, 31)
         );
-        Rental secondRental = rental(
-                18L,
-                LocalDate.of(2026, 7, 30),
-                LocalDate.of(2026, 8, 2)
-        );
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
-                        CUTOFF_DATE
+                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
+                        TODAY
                 ))
-                .thenReturn(List.of(firstRental, secondRental));
+                .thenReturn(List.of(firstRental));
 
         scheduler.notifyAboutOverdueRentals();
 
@@ -78,20 +73,13 @@ class OverdueRentalNotificationSchedulerTest {
                 Car: Skoda Octavia (#7)
                 Rental date: 2026-07-28
                 Return date: 2026-07-31""");
-        inOrder.verify(notificationService).send("""
-                Overdue rental
-                Rental ID: 18
-                Customer ID: 5
-                Car: Skoda Octavia (#7)
-                Rental date: 2026-07-30
-                Return date: 2026-08-02""");
     }
 
     @Test
     void notifyAboutOverdueRentals_WithNoOverdueRentals_SendsSummary() {
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
-                        CUTOFF_DATE
+                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
+                        TODAY
                 ))
                 .thenReturn(List.of());
 
@@ -110,11 +98,11 @@ class OverdueRentalNotificationSchedulerTest {
         Rental secondRental = rental(
                 18L,
                 LocalDate.of(2026, 7, 30),
-                LocalDate.of(2026, 8, 2)
+                LocalDate.of(2026, 7, 31)
         );
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
-                        CUTOFF_DATE
+                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
+                        TODAY
                 ))
                 .thenReturn(List.of(firstRental, secondRental));
         doThrow(new NotificationException("Telegram unavailable"))

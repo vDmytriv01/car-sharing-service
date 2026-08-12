@@ -33,7 +33,7 @@ public interface RentalRepository extends
     Optional<Rental> findByIdAndUserEmail(Long id, String email);
 
     @EntityGraph(attributePaths = {"car", "user"})
-    List<Rental> findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+    List<Rental> findAllByActualReturnDateIsNullAndReturnDateLessThan(
             LocalDate returnDate
     );
 

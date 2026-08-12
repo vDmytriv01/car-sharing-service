@@ -47,6 +47,22 @@ public class UserService {
         }
     }
 
+    @Transactional
+    public void bootstrapManager(UserRegistrationRequest request) {
+        String email = normalizeEmail(request.email());
+        Role managerRole = findRole(RoleName.MANAGER);
+        userRepository.findByEmail(email).ifPresentOrElse(
+                user -> user.setRole(managerRole),
+                () -> {
+                    User user = userMapper.toModel(request);
+                    user.setEmail(email);
+                    user.setPassword(passwordEncoder.encode(request.password()));
+                    user.setRole(managerRole);
+                    userRepository.saveAndFlush(user);
+                }
+        );
+    }
+
     @Transactional(readOnly = true)
     public UserResponse getCurrentUser(String email) {
         return userMapper.toResponse(findUserByEmail(email));

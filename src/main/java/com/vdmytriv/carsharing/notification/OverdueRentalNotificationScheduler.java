@@ -25,10 +25,10 @@ public class OverdueRentalNotificationScheduler {
             zone = "${notification.overdue-rentals.zone}"
     )
     public void notifyAboutOverdueRentals() {
-        LocalDate cutoffDate = LocalDate.now(clock).plusDays(1);
+        LocalDate today = LocalDate.now(clock);
         List<Rental> rentals = rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
-                        cutoffDate
+                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
+                        today
                 );
 
         if (rentals.isEmpty()) {
