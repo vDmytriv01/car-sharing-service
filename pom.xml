@@ -21,7 +21,7 @@
         <jacoco.minimum.line.coverage>0.60</jacoco.minimum.line.coverage>
         <jjwt.version>0.13.0</jjwt.version>
         <springdoc.version>3.0.3</springdoc.version>
-        <stripe.version>33.1.1</stripe.version>
+        <stripe.version>33.3.0</stripe.version>
     </properties>
     <dependencies>
         <dependency>
