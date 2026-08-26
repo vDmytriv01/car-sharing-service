@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -49,7 +50,7 @@ public class PaymentController {
     public PageResponse<PaymentResponse> findAll(
             Principal principal,
             @RequestParam(name = "user_id", required = false) Long userId,
-            @PageableDefault(size = 20, sort = "id") Pageable pageable
+            @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable
     ) {
         return paymentService.findAll(
                 principal.getName(),
