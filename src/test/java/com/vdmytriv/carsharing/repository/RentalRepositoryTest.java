@@ -77,7 +77,7 @@ class RentalRepositoryTest {
     }
 
     @Test
-    void findOverdueRentals_ReturnsOnlyUnreturnedPastDueRentals() {
+    void findRentalsDueByTomorrow_ReturnsOnlyUnreturnedRentals() {
         User user = saveUser("customer@example.com");
         Car car = saveCar();
         LocalDate today = LocalDate.of(2026, 8, 1);
@@ -85,26 +85,33 @@ class RentalRepositoryTest {
         overdueRental.setReturnDate(today.minusDays(1));
         Rental dueToday = createRental(user, car);
         dueToday.setReturnDate(today);
-        Rental futureRental = createRental(user, car);
-        futureRental.setReturnDate(today.plusDays(1));
+        Rental dueTomorrow = createRental(user, car);
+        dueTomorrow.setReturnDate(today.plusDays(1));
+        Rental laterRental = createRental(user, car);
+        laterRental.setReturnDate(today.plusDays(2));
         Rental returnedRental = createRental(user, car);
         returnedRental.setReturnDate(today.minusDays(1));
         returnedRental.setActualReturnDate(today.minusDays(1));
         rentalRepository.saveAllAndFlush(List.of(
                 overdueRental,
                 dueToday,
-                futureRental,
+                dueTomorrow,
+                laterRental,
                 returnedRental
         ));
 
         List<Rental> rentals = rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
-                        today
+                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+                        today.plusDays(1)
                 );
 
         assertThat(rentals)
                 .extracting(Rental::getId)
-                .containsExactly(overdueRental.getId());
+                .containsExactlyInAnyOrder(
+                        overdueRental.getId(),
+                        dueToday.getId(),
+                        dueTomorrow.getId()
+                );
     }
 
     @ParameterizedTest

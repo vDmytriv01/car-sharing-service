@@ -51,15 +51,15 @@ class OverdueRentalNotificationSchedulerTest {
     }
 
     @Test
-    void notifyAboutOverdueRentals_WithOverdueRentals_SendsEachRental() {
+    void notifyAboutOverdueRentals_WithRentalsDueByTomorrow_SendsEachRental() {
         Rental firstRental = rental(
                 17L,
                 LocalDate.of(2026, 7, 28),
                 LocalDate.of(2026, 7, 31)
         );
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
-                        TODAY
+                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+                        TODAY.plusDays(1)
                 ))
                 .thenReturn(List.of(firstRental));
 
@@ -78,8 +78,8 @@ class OverdueRentalNotificationSchedulerTest {
     @Test
     void notifyAboutOverdueRentals_WithNoOverdueRentals_SendsSummary() {
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
-                        TODAY
+                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+                        TODAY.plusDays(1)
                 ))
                 .thenReturn(List.of());
 
@@ -101,8 +101,8 @@ class OverdueRentalNotificationSchedulerTest {
                 LocalDate.of(2026, 7, 31)
         );
         when(rentalRepository
-                .findAllByActualReturnDateIsNullAndReturnDateLessThan(
-                        TODAY
+                .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
+                        TODAY.plusDays(1)
                 ))
                 .thenReturn(List.of(firstRental, secondRental));
         doThrow(new NotificationException("Telegram unavailable"))
