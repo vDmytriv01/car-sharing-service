@@ -1,11 +1,14 @@
 package com.vdmytriv.carsharing.service;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.vdmytriv.carsharing.TestcontainersConfiguration;
+import com.vdmytriv.carsharing.dto.rental.RentalCreateRequest;
 import com.vdmytriv.carsharing.exception.InvalidRequestException;
 import com.vdmytriv.carsharing.model.Car;
 import com.vdmytriv.carsharing.model.CarType;
@@ -32,6 +35,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -56,11 +61,37 @@ class RentalConcurrencyIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @AfterEach
     void cleanUp() {
         rentalRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
         carRepository.deleteAllInBatch();
+    }
+
+    @Test
+    void createRental_Concurrently_RentsLastAvailableCarOnlyOnce()
+            throws Exception {
+        User firstCustomer = saveUser("first.customer@example.com");
+        User secondCustomer = saveUser("second.customer@example.com");
+        Car car = saveCar(1);
+        RentalCreateRequest request = new RentalCreateRequest(
+                LocalDate.now().plusDays(2),
+                car.getId()
+        );
+
+        List<Boolean> results = createWithLockContention(
+                firstCustomer.getEmail(),
+                secondCustomer.getEmail(),
+                request
+        );
+
+        assertEquals(1, results.stream().filter(Boolean::booleanValue).count());
+        assertEquals(1, rentalRepository.count());
+        assertEquals(0, carRepository.findById(car.getId()).orElseThrow()
+                .getInventory());
     }
 
     @Test
@@ -107,19 +138,88 @@ class RentalConcurrencyIntegrationTest {
             Long firstRentalId,
             Long secondRentalId
     ) throws Exception {
+        return runConcurrently(
+                returnTask(email, firstRentalId),
+                returnTask(email, secondRentalId)
+        );
+    }
+
+    private List<Boolean> createWithLockContention(
+            String firstEmail,
+            String secondEmail,
+            RentalCreateRequest request
+    ) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch firstLockAcquired = new CountDownLatch(1);
+        CountDownLatch secondCreateStarted = new CountDownLatch(1);
+        CountDownLatch secondCreateFinished = new CountDownLatch(1);
+        CountDownLatch releaseFirstLock = new CountDownLatch(1);
+        TransactionTemplate transactionTemplate = new TransactionTemplate(
+                transactionManager
+        );
+
+        try {
+            final Future<Boolean> first = executor.submit(() -> createWhileHoldingLock(
+                    transactionTemplate,
+                    firstEmail,
+                    request,
+                    firstLockAcquired,
+                    releaseFirstLock
+            ));
+            assertTrue(firstLockAcquired.await(5, SECONDS));
+            final Future<Boolean> second = executor.submit(() -> {
+                secondCreateStarted.countDown();
+                try {
+                    return tryCreateRental(secondEmail, request);
+                } finally {
+                    secondCreateFinished.countDown();
+                }
+            });
+            assertTrue(secondCreateStarted.await(5, SECONDS));
+            assertFalse(secondCreateFinished.await(500, MILLISECONDS));
+            releaseFirstLock.countDown();
+            return List.of(
+                    first.get(10, SECONDS),
+                    second.get(10, SECONDS)
+            );
+        } finally {
+            releaseFirstLock.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private boolean createWhileHoldingLock(
+            TransactionTemplate transactionTemplate,
+            String email,
+            RentalCreateRequest request,
+            CountDownLatch lockAcquired,
+            CountDownLatch releaseLock
+    ) {
+        Boolean result = transactionTemplate.execute(status -> {
+            carRepository.findActiveByIdForUpdate(request.carId())
+                    .orElseThrow();
+            lockAcquired.countDown();
+            await(releaseLock);
+            return tryCreateRental(email, request);
+        });
+        return Boolean.TRUE.equals(result);
+    }
+
+    private List<Boolean> runConcurrently(
+            Callable<Boolean> firstOperation,
+            Callable<Boolean> secondOperation
+    ) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         try {
-            Future<Boolean> first = executor.submit(returnTask(
-                    email,
-                    firstRentalId,
+            Future<Boolean> first = executor.submit(awaitStart(
+                    firstOperation,
                     ready,
                     start
             ));
-            Future<Boolean> second = executor.submit(returnTask(
-                    email,
-                    secondRentalId,
+            Future<Boolean> second = executor.submit(awaitStart(
+                    secondOperation,
                     ready,
                     start
             ));
@@ -137,13 +237,9 @@ class RentalConcurrencyIntegrationTest {
 
     private Callable<Boolean> returnTask(
             String email,
-            Long rentalId,
-            CountDownLatch ready,
-            CountDownLatch start
+            Long rentalId
     ) {
         return () -> {
-            ready.countDown();
-            start.await();
             try {
                 rentalService.returnRental(email, rentalId);
                 return true;
@@ -151,6 +247,46 @@ class RentalConcurrencyIntegrationTest {
                 return false;
             }
         };
+    }
+
+    private boolean tryCreateRental(
+            String email,
+            RentalCreateRequest request
+    ) {
+        try {
+            rentalService.create(email, request);
+            return true;
+        } catch (InvalidRequestException exception) {
+            assertEquals(
+                    "Car is not available for rental",
+                    exception.getMessage()
+            );
+            return false;
+        }
+    }
+
+    private Callable<Boolean> awaitStart(
+            Callable<Boolean> operation,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        return () -> {
+            ready.countDown();
+            start.await();
+            return operation.call();
+        };
+    }
+
+    private void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(5, SECONDS));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "Interrupted while waiting for concurrent operation",
+                    exception
+            );
+        }
     }
 
     private Car saveCar(int inventory) {
