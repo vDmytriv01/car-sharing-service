@@ -16,9 +16,9 @@ REST API for managing a car-sharing fleet, rentals, payments, and customer notif
 
 ## About the project
 
-Car Sharing Service is a portfolio backend that models the complete rental flow: a manager maintains the fleet, a customer rents and returns a car, Stripe collects the rental payment or overdue fine, and Telegram reports important events.
+Car Sharing Service is a REST API for a complete car rental flow. Managers maintain the fleet, customers rent and return available cars, Stripe handles rental payments and overdue fines, and Telegram sends operational notifications.
 
-The project focuses on the parts that usually make a backend reliable rather than only exposing CRUD endpoints: role-based security, transactional inventory updates, database constraints, payment idempotency, verified webhooks, migrations, automated tests, health checks, and reproducible Docker startup.
+The main business rules are handled in the service and database layers. Creating or returning a rental updates inventory in the same transaction, a database constraint prevents duplicate payment records, and Stripe events are accepted only after their signature has been checked. The repository also includes migrations, automated tests, Docker Compose, CI, and OpenAPI documentation.
 
 ## Features
 
@@ -41,17 +41,17 @@ The project focuses on the parts that usually make a backend reliable rather tha
 - receive Telegram notifications about new rentals and completed payments;
 - receive a scheduled summary of overdue rentals.
 
-### Engineering highlights
+### Important implementation details
 
-- **Secure authentication:** stateless Spring Security with signed JWT access tokens and BCrypt password hashing.
-- **Role-based authorization:** `CUSTOMER` and `MANAGER` permissions are enforced at the API boundary.
-- **Safe inventory updates:** pessimistic database locking prevents two concurrent customers from taking the last available car.
-- **Consistent returns:** returning a rental and restoring car inventory happen in one transaction.
-- **Payment idempotency:** a database unique constraint and Stripe idempotency keys allow only one payment of each type per rental.
-- **Trusted payment updates:** Stripe webhook signatures are verified before payment status changes are accepted.
-- **After-commit notifications:** external messages are sent only after successful business transactions.
-- **Versioned schema:** Liquibase owns the database structure and reference data.
-- **Production-oriented runtime:** a multi-stage, non-root Docker image, health checks, graceful shutdown, and environment-based secrets.
+- Spring Security authenticates requests with signed JWT access tokens and stores passwords as BCrypt hashes.
+- Endpoint rules separate customer operations from manager-only fleet and user management.
+- Rental creation locks the selected car row before checking and decreasing inventory.
+- Returning a rental locks the rental and car rows, records the actual return date, and restores inventory in one transaction.
+- The `(rental_id, type)` database constraint and Stripe idempotency key prevent duplicate rental payments and fines.
+- The webhook handler verifies the Stripe signature before updating a payment to `PAID`.
+- Notifications are sent only after the related database update succeeds. Telegram failures are logged without rolling back completed business operations.
+- Liquibase manages the schema, constraints, and initial reference data.
+- The Docker image uses a multi-stage build and a non-root runtime user. Compose also configures database and application health checks.
 
 ## Architecture
 
@@ -71,7 +71,7 @@ flowchart LR
     Scheduler --> Repositories
 ```
 
-The code uses a conventional layered structure because it is easy to navigate and appropriate for the size of the application. Controllers own HTTP concerns, services own business rules and transaction boundaries, repositories own persistence, and small gateway classes isolate Stripe and Telegram.
+The application stays as one Spring Boot service because the current domain does not need separate deployments. HTTP handling, business logic, and persistence are split into controller, service, and repository packages. Stripe and Telegram are kept behind small integration classes so their SDK and HTTP details do not spread through the rental code.
 
 ## Domain model
 
@@ -231,7 +231,17 @@ curl -X POST http://localhost:8080/login \
   }'
 ```
 
-Copy the returned token, click **Authorize** in Swagger UI, and enter it as a bearer token. A manager can then add inventory; the customer can create a rental and open the Checkout URL returned by `POST /payments`.
+Copy the returned token, click **Authorize** in Swagger UI, and enter it as a bearer token.
+
+The following sequence is useful for a manual smoke test:
+
+1. Sign in as the bootstrap manager and create a car with one available unit.
+2. Sign in as a customer, find the car through `GET /cars`, and create a rental.
+3. Check that the available inventory decreased to zero and that Telegram received the rental notification.
+4. Create a `PAYMENT` through `POST /payments` and open the returned Checkout URL.
+5. Complete the payment in Stripe test mode and check that the signed webhook changed its status to `PAID`.
+6. Repeat the payment request and confirm that it does not create another payment for the same rental.
+7. Return the rental and check that the car is available again.
 
 Car search parameters can be combined like a small query constructor:
 
@@ -331,6 +341,6 @@ Database changes are under `src/main/resources/db/changelog`, and tests mirror t
 
 ## Current scope
 
-The application is complete for local development and Docker-based demonstration. Real Stripe and Telegram calls require the owner's test credentials and are intentionally not exercised in public CI. Cloud deployment and Infrastructure as Code belong to the separate deployment stage; this repository does not claim to be currently hosted on AWS.
+The current version is intended for local development and a Docker-based demo. Public CI uses isolated test configuration, so it does not call real Stripe or Telegram accounts. A deployment and Infrastructure as Code are planned as a separate stage; the application is not currently hosted on AWS.
 
 The functional scope follows the [Mate Academy car-sharing service specification](https://github.com/mate-academy/jv-car-sharing-service).
