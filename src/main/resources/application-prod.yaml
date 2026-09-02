@@ -1,8 +1,13 @@
+server:
+  shutdown: graceful
+
 spring:
   datasource:
     password: ${DB_PASSWORD}
     url: ${DB_URL}
     username: ${DB_USERNAME}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
 payment:
   base-url: ${APP_BASE_URL}

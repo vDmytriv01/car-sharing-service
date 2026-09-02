@@ -24,7 +24,10 @@ import org.springframework.security.web.savedrequest.NullRequestCache;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        ManagerBootstrapProperties.class
+})
 public class SecurityConfig {
 
     @Bean

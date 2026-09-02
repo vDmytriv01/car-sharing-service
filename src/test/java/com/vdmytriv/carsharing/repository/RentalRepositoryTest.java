@@ -77,35 +77,39 @@ class RentalRepositoryTest {
     }
 
     @Test
-    void findOverdueRentals_ReturnsUnreturnedRentalsDueByTomorrow() {
+    void findRentalsDueByTomorrow_ReturnsOnlyUnreturnedRentals() {
         User user = saveUser("customer@example.com");
         Car car = saveCar();
-        LocalDate cutoffDate = LocalDate.of(2026, 8, 2);
+        LocalDate today = LocalDate.of(2026, 8, 1);
         Rental overdueRental = createRental(user, car);
-        overdueRental.setReturnDate(cutoffDate.minusDays(1));
+        overdueRental.setReturnDate(today.minusDays(1));
+        Rental dueToday = createRental(user, car);
+        dueToday.setReturnDate(today);
         Rental dueTomorrow = createRental(user, car);
-        dueTomorrow.setReturnDate(cutoffDate);
-        Rental futureRental = createRental(user, car);
-        futureRental.setReturnDate(cutoffDate.plusDays(1));
+        dueTomorrow.setReturnDate(today.plusDays(1));
+        Rental laterRental = createRental(user, car);
+        laterRental.setReturnDate(today.plusDays(2));
         Rental returnedRental = createRental(user, car);
-        returnedRental.setReturnDate(cutoffDate.minusDays(1));
-        returnedRental.setActualReturnDate(cutoffDate.minusDays(1));
+        returnedRental.setReturnDate(today.minusDays(1));
+        returnedRental.setActualReturnDate(today.minusDays(1));
         rentalRepository.saveAllAndFlush(List.of(
                 overdueRental,
+                dueToday,
                 dueTomorrow,
-                futureRental,
+                laterRental,
                 returnedRental
         ));
 
         List<Rental> rentals = rentalRepository
                 .findAllByActualReturnDateIsNullAndReturnDateLessThanEqual(
-                        cutoffDate
+                        today.plusDays(1)
                 );
 
         assertThat(rentals)
                 .extracting(Rental::getId)
                 .containsExactlyInAnyOrder(
                         overdueRental.getId(),
+                        dueToday.getId(),
                         dueTomorrow.getId()
                 );
     }

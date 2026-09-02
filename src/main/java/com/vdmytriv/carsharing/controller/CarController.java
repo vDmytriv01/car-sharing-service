@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -48,8 +49,8 @@ public class CarController {
     @Operation(summary = "Get cars with optional filters")
     @GetMapping
     public PageResponse<CarResponse> findAll(
-            @ModelAttribute @Valid CarSearchCriteria criteria,
-            @PageableDefault(size = 20, sort = "id") Pageable pageable
+            @ParameterObject @ModelAttribute @Valid CarSearchCriteria criteria,
+            @ParameterObject @PageableDefault(size = 20, sort = "id") Pageable pageable
     ) {
         return carService.findAll(criteria, pageable);
     }

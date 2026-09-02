@@ -178,6 +178,24 @@ class CarApiIntegrationTest {
     }
 
     @Test
+    void getCars_WithNegativePage_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/cars")
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Page number cannot be negative"));
+    }
+
+    @Test
+    void getCars_WithNonPositiveSize_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/cars")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Page size must be greater than zero"));
+    }
+
+    @Test
     void getCar_WithoutAuthentication_ReturnsCar() throws Exception {
         Car car = saveCar("Civic", "Honda", CarType.SEDAN, 2, "50.00");
 

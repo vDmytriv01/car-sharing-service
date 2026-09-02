@@ -396,6 +396,18 @@ class PaymentApiIntegrationTest {
                         .value("Invalid Stripe webhook signature"));
     }
 
+    @Test
+    void stripeWebhook_WithoutSignature_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/payments/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("Required request header is missing: Stripe-Signature"))
+                .andExpect(jsonPath("$.path").value("/payments/webhook"));
+    }
+
     private String bearer(User user) {
         return "Bearer " + jwtService.generateToken(user.getEmail());
     }

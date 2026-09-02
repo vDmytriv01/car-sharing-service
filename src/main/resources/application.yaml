@@ -30,6 +30,15 @@ springdoc:
     path: /swagger-ui.html
     tags-sorter: alpha
 
+app:
+  bootstrap:
+    manager:
+      enabled: ${BOOTSTRAP_MANAGER_ENABLED:false}
+      email: ${BOOTSTRAP_MANAGER_EMAIL:}
+      first-name: ${BOOTSTRAP_MANAGER_FIRST_NAME:}
+      last-name: ${BOOTSTRAP_MANAGER_LAST_NAME:}
+      password: ${BOOTSTRAP_MANAGER_PASSWORD:}
+
 security:
   jwt:
     expiration: ${JWT_EXPIRATION:1h}
