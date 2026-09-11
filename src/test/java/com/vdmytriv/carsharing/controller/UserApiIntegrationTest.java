@@ -126,6 +126,26 @@ class UserApiIntegrationTest {
     }
 
     @Test
+    void register_WithPasswordOverBcryptByteLimit_ReturnsBadRequest() throws Exception {
+        String password = "я".repeat(40);
+
+        mockMvc.perform(post("/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "unicode.user@example.com",
+                                  "firstName": "Unicode",
+                                  "lastName": "User",
+                                  "password": "%s"
+                                }
+                                """.formatted(password)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.password").value(
+                        "must not exceed 72 bytes in UTF-8"
+                ));
+    }
+
+    @Test
     void login_WithInvalidCredentials_ReturnsUnauthorized() throws Exception {
         saveUser(CUSTOMER_EMAIL, RoleName.CUSTOMER);
 

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.vdmytriv.carsharing.TestcontainersConfiguration;
+import com.vdmytriv.carsharing.dto.car.CarPatchRequest;
 import com.vdmytriv.carsharing.dto.rental.RentalCreateRequest;
 import com.vdmytriv.carsharing.exception.InvalidRequestException;
 import com.vdmytriv.carsharing.model.Car;
@@ -45,6 +46,9 @@ class RentalConcurrencyIntegrationTest {
 
     @Autowired
     private CarRepository carRepository;
+
+    @Autowired
+    private CarService carService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -131,6 +135,64 @@ class RentalConcurrencyIntegrationTest {
         assertTrue(results.stream().allMatch(Boolean::booleanValue));
         assertEquals(2, carRepository.findById(car.getId()).orElseThrow()
                 .getInventory());
+    }
+
+    @Test
+    void patchCar_WhileInventoryChanges_DoesNotRestorePreviousInventory()
+            throws Exception {
+        Car car = saveCar(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch inventoryChanged = new CountDownLatch(1);
+        CountDownLatch releaseInventoryUpdate = new CountDownLatch(1);
+        CountDownLatch patchStarted = new CountDownLatch(1);
+        CountDownLatch patchFinished = new CountDownLatch(1);
+        TransactionTemplate transactionTemplate = new TransactionTemplate(
+                transactionManager
+        );
+
+        try {
+            final Future<Void> inventoryUpdate = executor.submit(() -> {
+                transactionTemplate.executeWithoutResult(status -> {
+                    Car lockedCar = carRepository.findActiveByIdForUpdate(car.getId())
+                            .orElseThrow();
+                    lockedCar.setInventory(0);
+                    inventoryChanged.countDown();
+                    await(releaseInventoryUpdate);
+                });
+                return null;
+            });
+            assertTrue(inventoryChanged.await(5, SECONDS));
+
+            final Future<?> patch = executor.submit(() -> {
+                patchStarted.countDown();
+                try {
+                    return carService.patch(
+                            car.getId(),
+                            new CarPatchRequest(
+                                    null,
+                                    "Updated brand",
+                                    null,
+                                    null,
+                                    null
+                            )
+                    );
+                } finally {
+                    patchFinished.countDown();
+                }
+            });
+            assertTrue(patchStarted.await(5, SECONDS));
+            assertFalse(patchFinished.await(500, MILLISECONDS));
+            releaseInventoryUpdate.countDown();
+
+            inventoryUpdate.get(10, SECONDS);
+            patch.get(10, SECONDS);
+            Car updatedCar = carRepository.findById(car.getId()).orElseThrow();
+            assertEquals("Updated brand", updatedCar.getBrand());
+            assertEquals(0, updatedCar.getInventory());
+        } finally {
+            releaseInventoryUpdate.countDown();
+            executor.shutdownNow();
+        }
     }
 
     private List<Boolean> returnConcurrently(

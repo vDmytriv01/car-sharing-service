@@ -61,7 +61,7 @@ public class CarService {
 
     @Transactional
     public CarResponse update(Long id, CarUpdateRequest request) {
-        Car car = findActiveCar(id);
+        Car car = findActiveCarForUpdate(id);
         carMapper.updateModel(car, request);
         return carMapper.toResponse(car);
     }
@@ -69,18 +69,23 @@ public class CarService {
     @Transactional
     public CarResponse patch(Long id, CarPatchRequest request) {
         validatePatch(request);
-        Car car = findActiveCar(id);
+        Car car = findActiveCarForUpdate(id);
         carMapper.patchModel(car, request);
         return carMapper.toResponse(car);
     }
 
     @Transactional
     public void delete(Long id) {
-        carRepository.delete(findActiveCar(id));
+        carRepository.delete(findActiveCarForUpdate(id));
     }
 
     private Car findActiveCar(Long id) {
         return carRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Car", id));
+    }
+
+    private Car findActiveCarForUpdate(Long id) {
+        return carRepository.findActiveByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Car", id));
     }
 

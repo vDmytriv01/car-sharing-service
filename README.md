@@ -309,7 +309,7 @@ CI repeats the Maven verification, validates the Compose configuration, and buil
 | `JWT_ISSUER`, `JWT_EXPIRATION` | No | Token issuer and lifetime |
 | `MYSQL_DATABASE`, `MYSQL_USER` | Yes | Application database and user |
 | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Yes | Database credentials |
-| `STRIPE_SECRET_KEY` | Yes | Stripe test or live API key |
+| `STRIPE_SECRET_KEY` | Yes | Stripe test-mode API key |
 | `STRIPE_WEBHOOK_SECRET` | Yes | Stripe webhook signing secret |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Yes | Notification destination |
 | `APP_BASE_URL` | Yes | Public base URL used in Stripe callbacks |
