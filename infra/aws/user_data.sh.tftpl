@@ -1,13 +1,24 @@
 #!/bin/bash
 set -euo pipefail
 
+exec > >(tee -a /var/log/car-sharing-bootstrap.log | logger -t car-sharing-bootstrap -s 2>/dev/console) 2>&1
+
 systemd-run \
   --unit car-sharing-auto-terminate \
-  --on-active=${auto_terminate_minutes}m \
+  --on-active=${auto_terminate_minutes}min \
   /sbin/shutdown -h now
-trap '/sbin/shutdown -h now' ERR
 
-dnf install -y curl docker git
+on_error() {
+  trap - ERR
+  systemd-run \
+    --unit car-sharing-error-terminate \
+    --on-active=10min \
+    /sbin/shutdown -h now || /sbin/shutdown -h now
+}
+trap on_error ERR
+
+dnf install -y amazon-ssm-agent curl docker git
+systemctl enable --now amazon-ssm-agent
 systemctl enable --now docker
 
 install -d -m 0700 /opt/car-sharing
