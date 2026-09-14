@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+dnf install -y docker git
+systemctl enable --now docker
+
+install -d -m 0700 /opt/car-sharing
+git clone --depth 1 --branch "${repository_ref}" "${repository_url}" /opt/car-sharing/source
+
+cat >/opt/car-sharing/app.env <<'ENV'
+APP_BASE_URL=http://localhost:${app_port}
+BOOTSTRAP_MANAGER_ENABLED=false
+DB_PASSWORD=${mysql_password}
+DB_URL=jdbc:mysql://mysql:3306/car_sharing
+DB_USERNAME=car_sharing
+JWT_EXPIRATION=1h
+JWT_ISSUER=car-sharing-service
+JWT_SECRET=${jwt_secret}
+OVERDUE_NOTIFICATION_CRON=0 0 9 * * *
+OVERDUE_NOTIFICATION_ZONE=UTC
+SPRING_PROFILES_ACTIVE=prod
+STRIPE_SECRET_KEY=sk_test_aws_demo_placeholder
+STRIPE_WEBHOOK_SECRET=whsec_aws_demo_placeholder
+TELEGRAM_BOT_TOKEN=aws-demo-placeholder
+TELEGRAM_CHAT_ID=aws-demo-placeholder
+ENV
+chmod 0600 /opt/car-sharing/app.env
+
+docker network create car-sharing
+docker volume create car-sharing-mysql
+
+docker run --detach \
+  --name mysql \
+  --network car-sharing \
+  --restart unless-stopped \
+  --env MYSQL_DATABASE=car_sharing \
+  --env MYSQL_USER=car_sharing \
+  --env MYSQL_PASSWORD="${mysql_password}" \
+  --env MYSQL_ROOT_PASSWORD="${mysql_root_password}" \
+  --volume car-sharing-mysql:/var/lib/mysql \
+  mysql:8.4
+
+for attempt in $(seq 1 60); do
+  if docker exec mysql mysqladmin ping --host localhost --user root --password="${mysql_root_password}" --silent; then
+    break
+  fi
+  sleep 5
+done
+
+docker exec mysql mysqladmin ping --host localhost --user root --password="${mysql_root_password}" --silent
+docker build --tag car-sharing-service:aws-demo /opt/car-sharing/source
+
+docker run --detach \
+  --name car-sharing-service \
+  --network car-sharing \
+  --restart unless-stopped \
+  --env-file /opt/car-sharing/app.env \
+  --publish ${app_port}:8080 \
+  car-sharing-service:aws-demo

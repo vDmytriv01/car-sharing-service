@@ -9,6 +9,16 @@ target/
 .env.*
 !.env.sample
 *.log
+.tools/
+
+### Terraform local state ###
+*.tfstate
+*.tfstate.*
+*.tfvars
+!.tfvars.example
+.terraform/
+crash.log
+crash.*.log
 
 ### STS ###
 .apt_generated
