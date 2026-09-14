@@ -5,8 +5,9 @@ learning activity. It creates one VPC, one public subnet, an internet gateway,
 a security group, an EC2 instance, and an EC2 role for Session Manager. No SSH
 port or SSH key is created.
 
-The instance clones the public repository, builds the application image, and
-runs the API and MySQL in Docker. Stripe and Telegram use non-functional demo
+The instance shallow-clones the configured public branch, verifies that its
+HEAD is the exact required commit SHA, builds the application image, and runs
+the API and MySQL in Docker. Stripe and Telegram use non-functional demo
 placeholders; do not exercise those integrations in this temporary deployment.
 
 ## Cost safety

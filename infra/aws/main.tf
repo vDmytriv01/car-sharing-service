@@ -154,6 +154,7 @@ resource "aws_instance" "app" {
     jwt_secret             = random_password.jwt.result
     mysql_password         = random_password.mysql.result
     mysql_root_password    = random_password.mysql_root.result
+    repository_branch      = var.repository_branch
     repository_ref         = var.repository_ref
     repository_url         = var.repository_url
   })

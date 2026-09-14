@@ -11,10 +11,8 @@ dnf install -y curl docker git
 systemctl enable --now docker
 
 install -d -m 0700 /opt/car-sharing
-git init /opt/car-sharing/source
-git -C /opt/car-sharing/source remote add origin "${repository_url}"
-git -C /opt/car-sharing/source fetch --depth 1 origin "${repository_ref}"
-git -C /opt/car-sharing/source checkout --detach FETCH_HEAD
+git clone --depth 1 --branch "${repository_branch}" "${repository_url}" /opt/car-sharing/source
+test "$(git -C /opt/car-sharing/source rev-parse HEAD)" = "${repository_ref}"
 
 cat >/opt/car-sharing/app.env <<'ENV'
 APP_BASE_URL=http://localhost:${app_port}

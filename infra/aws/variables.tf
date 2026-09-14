@@ -28,6 +28,12 @@ variable "repository_url" {
   default     = "https://github.com/vDmytriv01/car-sharing-service.git"
 }
 
+variable "repository_branch" {
+  description = "Remote branch containing the immutable deployment commit."
+  type        = string
+  default     = "aws-deployment"
+}
+
 variable "repository_ref" {
   description = "Immutable Git commit SHA deployed to EC2. The commit must exist on the remote."
   type        = string
