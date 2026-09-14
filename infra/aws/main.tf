@@ -149,15 +149,17 @@ resource "aws_instance" "app" {
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    app_port            = var.app_port
-    jwt_secret          = random_password.jwt.result
-    mysql_password      = random_password.mysql.result
-    mysql_root_password = random_password.mysql_root.result
-    repository_ref      = var.repository_ref
-    repository_url      = var.repository_url
+    app_port               = var.app_port
+    auto_terminate_minutes = var.auto_terminate_minutes
+    jwt_secret             = random_password.jwt.result
+    mysql_password         = random_password.mysql.result
+    mysql_root_password    = random_password.mysql_root.result
+    repository_ref         = var.repository_ref
+    repository_url         = var.repository_url
   })
 
-  user_data_replace_on_change = true
+  instance_initiated_shutdown_behavior = "terminate"
+  user_data_replace_on_change          = true
 
   metadata_options {
     http_endpoint = "enabled"
@@ -179,4 +181,25 @@ resource "aws_instance" "app" {
     aws_iam_role_policy_attachment.ssm,
     aws_route_table_association.public,
   ]
+}
+
+resource "terraform_data" "app_health" {
+  triggers_replace = [aws_instance.app.id]
+
+  provisioner "local-exec" {
+    interpreter = ["PowerShell", "-NoProfile", "-Command"]
+    command     = <<-EOT
+      $url = 'http://${aws_instance.app.public_ip}:${var.app_port}/actuator/health'
+      $deadline = (Get-Date).AddMinutes(20)
+      while ((Get-Date) -lt $deadline) {
+        try {
+          $response = Invoke-RestMethod -Uri $url -TimeoutSec 10
+          if ($response.status -eq 'UP') { exit 0 }
+        } catch {}
+        Start-Sleep -Seconds 15
+      }
+      Write-Error "Application did not become healthy within 20 minutes: $url"
+      exit 1
+    EOT
+  }
 }

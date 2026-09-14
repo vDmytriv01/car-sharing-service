@@ -12,9 +12,11 @@ placeholders; do not exercise those integrations in this temporary deployment.
 ## Cost safety
 
 EC2 compute, EBS storage, and the public IPv4 address can consume AWS credits.
-Keep the deployment only long enough to verify the activity credit, then run
-`terraform destroy`. The root EBS volume is encrypted and deleted with the
-instance. Terraform state and variable files are ignored by Git.
+The instance terminates itself after 60 minutes by default, including when its
+bootstrap fails. Keep it only long enough to verify the activity credit, then
+run `terraform destroy` to remove the remaining free VPC and IAM resources. The
+root EBS volume is encrypted and deleted with the instance. Terraform state and
+variable files are ignored by Git.
 
 ## Commands
 
@@ -22,11 +24,17 @@ From `infra/aws`, using the project-local Terraform binary on Windows:
 
 ```powershell
 ..\..\.tools\terraform\terraform.exe init
-..\..\.tools\terraform\terraform.exe plan
-..\..\.tools\terraform\terraform.exe apply
+..\..\.tools\terraform\terraform.exe plan -var repository_ref=<pushed-commit-sha> -var allowed_cidr=<your-public-ip>/32
+..\..\.tools\terraform\terraform.exe apply -var repository_ref=<pushed-commit-sha> -var allowed_cidr=<your-public-ip>/32
 ..\..\.tools\terraform\terraform.exe output -raw health_url
 ..\..\.tools\terraform\terraform.exe destroy
 ```
 
 The stack uses the local `vadym-work` AWS CLI profile by default. Override the
 `aws_profile` variable if you use another local profile name.
+
+After the health check succeeds, open AWS Billing and Cost Management → Credits
+and look for `Explore AWS: Launch an instance using Amazon EC2`. AWS says the
+credit can take up to 30 minutes to appear. Check every 5 minutes. As soon as
+the `$20.00` credit is active, run `terraform destroy`; do not wait for the
+60-minute failsafe.

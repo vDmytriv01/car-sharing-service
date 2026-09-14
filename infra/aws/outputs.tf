@@ -11,11 +11,15 @@ output "instance_id" {
 output "public_url" {
   description = "Temporary public API URL."
   value       = "http://${aws_instance.app.public_ip}:${var.app_port}"
+
+  depends_on = [terraform_data.app_health]
 }
 
 output "health_url" {
   description = "Temporary Spring Boot health endpoint."
   value       = "http://${aws_instance.app.public_ip}:${var.app_port}/actuator/health"
+
+  depends_on = [terraform_data.app_health]
 }
 
 data "aws_caller_identity" "current" {}

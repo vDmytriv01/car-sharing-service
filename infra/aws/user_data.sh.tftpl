@@ -1,11 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-dnf install -y docker git
+systemd-run \
+  --unit car-sharing-auto-terminate \
+  --on-active=${auto_terminate_minutes}m \
+  /sbin/shutdown -h now
+trap '/sbin/shutdown -h now' ERR
+
+dnf install -y curl docker git
 systemctl enable --now docker
 
 install -d -m 0700 /opt/car-sharing
-git clone --depth 1 --branch "${repository_ref}" "${repository_url}" /opt/car-sharing/source
+git init /opt/car-sharing/source
+git -C /opt/car-sharing/source remote add origin "${repository_url}"
+git -C /opt/car-sharing/source fetch --depth 1 origin "${repository_ref}"
+git -C /opt/car-sharing/source checkout --detach FETCH_HEAD
 
 cat >/opt/car-sharing/app.env <<'ENV'
 APP_BASE_URL=http://localhost:${app_port}
@@ -57,3 +66,13 @@ docker run --detach \
   --env-file /opt/car-sharing/app.env \
   --publish ${app_port}:8080 \
   car-sharing-service:aws-demo
+
+for attempt in $(seq 1 80); do
+  if curl --fail --silent http://localhost:${app_port}/actuator/health | grep --quiet '"status":"UP"'; then
+    trap - ERR
+    exit 0
+  fi
+  sleep 15
+done
+
+false
