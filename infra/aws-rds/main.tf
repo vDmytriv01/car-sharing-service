@@ -122,7 +122,7 @@ resource "aws_scheduler_schedule" "cleanup" {
     role_arn = aws_iam_role.cleanup.arn
 
     input = jsonencode({
-      DBInstanceIdentifier   = aws_db_instance.activity.identifier
+      DbInstanceIdentifier   = aws_db_instance.activity.identifier
       DeleteAutomatedBackups = true
       SkipFinalSnapshot      = true
     })
