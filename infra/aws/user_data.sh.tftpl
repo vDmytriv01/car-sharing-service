@@ -17,7 +17,7 @@ on_error() {
 }
 trap on_error ERR
 
-dnf install -y amazon-ssm-agent curl docker git
+dnf install -y docker git
 systemctl enable --now amazon-ssm-agent
 systemctl enable --now docker
 
