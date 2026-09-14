@@ -30,9 +30,8 @@ resource "aws_lambda_function" "web_app" {
   filename         = data.archive_file.function.output_path
   source_code_hash = data.archive_file.function.output_base64sha256
 
-  memory_size                    = 128
-  timeout                        = 3
-  reserved_concurrent_executions = 1
+  memory_size = 128
+  timeout     = 3
 
   tags = {
     Name = var.project_name

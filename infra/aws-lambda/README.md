@@ -3,8 +3,8 @@
 This module creates a minimal Python Lambda web app with a Function URL for
 the AWS Free Tier learning activity. The URL is temporarily public because the
 activity requires a browser-accessible web app. The function returns static
-HTML, has no access to other AWS services, and is capped at one concurrent
-invocation.
+HTML and has no access to other AWS services. The URL is kept only until the
+activity credit appears, then the entire stack is destroyed.
 
 ```powershell
 ..\..\.tools\terraform\terraform.exe init
