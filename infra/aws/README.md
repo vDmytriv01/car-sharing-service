@@ -23,15 +23,23 @@ variable files are ignored by Git.
 From `infra/aws`, using the project-local Terraform binary on Windows:
 
 ```powershell
+Copy-Item terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars: set the pushed commit SHA and your public IPv4 /32.
 ..\..\.tools\terraform\terraform.exe init
-..\..\.tools\terraform\terraform.exe plan -var repository_ref=<pushed-commit-sha> -var allowed_cidr=<your-public-ip>/32
-..\..\.tools\terraform\terraform.exe apply -var repository_ref=<pushed-commit-sha> -var allowed_cidr=<your-public-ip>/32
+..\..\.tools\terraform\terraform.exe plan
+..\..\.tools\terraform\terraform.exe apply
 ..\..\.tools\terraform\terraform.exe output -raw health_url
 ..\..\.tools\terraform\terraform.exe destroy
 ```
 
 The stack uses the local `vadym-work` AWS CLI profile by default. Override the
-`aws_profile` variable if you use another local profile name.
+`aws_profile` variable if you use another local profile name. Keep the ignored
+`terraform.tfvars` file until destroy completes; Terraform needs the same
+required inputs when it removes the stack.
+
+The client-side readiness check intentionally uses PowerShell because this
+deployment workflow runs from Windows. The EC2 bootstrap itself runs on Amazon
+Linux.
 
 After the health check succeeds, open AWS Billing and Cost Management → Credits
 and look for `Explore AWS: Launch an instance using Amazon EC2`. AWS says the
