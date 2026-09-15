@@ -1,12 +1,7 @@
-aws_region     = "eu-central-1"
-aws_profile    = "vadym-work"
-instance_type     = "t3.small"
-repository_branch = "aws-deployment"
-repository_ref    = "0123456789abcdef0123456789abcdef01234567"
-
-# Replace this with your current public IPv4 address/32 before apply.
-allowed_cidr = "203.0.113.10/32"
-
-# The EC2 instance terminates itself after this time even if Terraform cleanup
-# is interrupted. Run terraform destroy afterward to remove the free resources.
-auto_terminate_minutes = 60
+aws_region             = "eu-central-1"
+aws_profile            = "vadym-work"
+instance_type          = "t3.small"
+repository_branch      = "aws-deployment"
+repository_ref         = "0123456789abcdef0123456789abcdef01234567"
+public_access_cidr     = "0.0.0.0/0"
+auto_terminate_minutes = 4320

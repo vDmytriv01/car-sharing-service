@@ -21,7 +21,7 @@ provider "aws" {
     tags = {
       ManagedBy = "Terraform"
       Project   = var.project_name
-      Purpose   = "AWS Free Tier learning activity"
+      Purpose   = "Portfolio deployment"
     }
   }
 }

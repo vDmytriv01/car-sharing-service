@@ -27,6 +27,8 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "random_password" "mysql" {
   length  = 32
   special = false
@@ -40,6 +42,59 @@ resource "random_password" "mysql_root" {
 resource "random_password" "jwt" {
   length  = 64
   special = false
+}
+
+locals {
+  parameter_prefix = "/${var.project_name}/prod"
+  public_hostname  = "${replace(aws_eip.app.public_ip, ".", "-")}.sslip.io"
+}
+
+resource "aws_ssm_parameter" "stripe_secret_key" {
+  name  = "${local.parameter_prefix}/stripe-secret-key"
+  type  = "SecureString"
+  value = var.stripe_secret_key
+}
+
+resource "aws_ssm_parameter" "stripe_webhook_secret" {
+  name  = "${local.parameter_prefix}/stripe-webhook-secret"
+  type  = "SecureString"
+  value = var.stripe_webhook_secret
+}
+
+resource "aws_ssm_parameter" "telegram_bot_token" {
+  name  = "${local.parameter_prefix}/telegram-bot-token"
+  type  = "SecureString"
+  value = var.telegram_bot_token
+}
+
+resource "aws_ssm_parameter" "telegram_chat_id" {
+  name  = "${local.parameter_prefix}/telegram-chat-id"
+  type  = "SecureString"
+  value = var.telegram_chat_id
+}
+
+resource "aws_ssm_parameter" "manager_email" {
+  name  = "${local.parameter_prefix}/manager-email"
+  type  = "SecureString"
+  value = var.manager_email
+}
+
+resource "aws_ssm_parameter" "manager_first_name" {
+  name  = "${local.parameter_prefix}/manager-first-name"
+  type  = "SecureString"
+  value = var.manager_first_name
+}
+
+resource "aws_ssm_parameter" "manager_last_name" {
+  name  = "${local.parameter_prefix}/manager-last-name"
+  type  = "SecureString"
+  value = var.manager_last_name
+}
+
+resource "aws_ssm_parameter" "manager_password" {
+  name  = "${local.parameter_prefix}/manager-password"
+  type  = "SecureString"
+  value = var.manager_password
 }
 
 resource "aws_vpc" "this" {
@@ -91,24 +146,40 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-app"
-  description = "Temporary public access to the car-sharing demo API"
+  description = "Public HTTPS access to the car-sharing portfolio API"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description = "Demo API"
-    from_port   = var.app_port
-    to_port     = var.app_port
+    description = "HTTP certificate challenge and redirect"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_cidr]
+    cidr_blocks = [var.public_access_cidr]
+  }
+
+  ingress {
+    description = "HTTPS API"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.public_access_cidr]
   }
 
   egress {
-    description = "Bootstrap packages and container images"
+    description = "Packages, container images, and external integrations"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "${var.project_name}-app"
+  }
+}
+
+resource "aws_eip" "app" {
+  domain = "vpc"
 
   tags = {
     Name = "${var.project_name}-app"
@@ -135,6 +206,32 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "application_parameters" {
+  name = "read-application-parameters"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+      ]
+      Resource = [
+        aws_ssm_parameter.stripe_secret_key.arn,
+        aws_ssm_parameter.stripe_webhook_secret.arn,
+        aws_ssm_parameter.telegram_bot_token.arn,
+        aws_ssm_parameter.telegram_chat_id.arn,
+        aws_ssm_parameter.manager_email.arn,
+        aws_ssm_parameter.manager_first_name.arn,
+        aws_ssm_parameter.manager_last_name.arn,
+        aws_ssm_parameter.manager_password.arn,
+      ]
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2"
   role = aws_iam_role.ec2.name
@@ -149,11 +246,13 @@ resource "aws_instance" "app" {
   iam_instance_profile        = aws_iam_instance_profile.ec2.name
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    app_port               = var.app_port
     auto_terminate_minutes = var.auto_terminate_minutes
+    aws_region             = var.aws_region
     jwt_secret             = random_password.jwt.result
     mysql_password         = random_password.mysql.result
     mysql_root_password    = random_password.mysql_root.result
+    parameter_prefix       = local.parameter_prefix
+    public_hostname        = local.public_hostname
     repository_branch      = var.repository_branch
     repository_ref         = var.repository_ref
     repository_url         = var.repository_url
@@ -179,28 +278,36 @@ resource "aws_instance" "app" {
   }
 
   depends_on = [
+    aws_iam_role_policy.application_parameters,
     aws_iam_role_policy_attachment.ssm,
     aws_route_table_association.public,
   ]
 }
 
+resource "aws_eip_association" "app" {
+  allocation_id = aws_eip.app.id
+  instance_id   = aws_instance.app.id
+}
+
 resource "terraform_data" "app_health" {
-  triggers_replace = [aws_instance.app.id]
+  triggers_replace = [aws_instance.app.id, aws_eip.app.id]
 
   provisioner "local-exec" {
     interpreter = ["PowerShell", "-NoProfile", "-Command"]
     command     = <<-EOT
-      $url = 'http://${aws_instance.app.public_ip}:${var.app_port}/actuator/health'
-      $deadline = (Get-Date).AddMinutes(20)
+      $url = 'https://${local.public_hostname}/actuator/health'
+      $deadline = (Get-Date).AddMinutes(25)
       while ((Get-Date) -lt $deadline) {
         try {
-          $response = Invoke-RestMethod -Uri $url -TimeoutSec 10
+          $response = Invoke-RestMethod -Uri $url -TimeoutSec 15
           if ($response.status -eq 'UP') { exit 0 }
         } catch {}
         Start-Sleep -Seconds 15
       }
-      Write-Error "Application did not become healthy within 20 minutes: $url"
+      Write-Error "Application did not become healthy within 25 minutes: $url"
       exit 1
     EOT
   }
+
+  depends_on = [aws_eip_association.app]
 }

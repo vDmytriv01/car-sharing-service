@@ -12,7 +12,7 @@ on_error() {
   trap - ERR
   systemd-run \
     --unit car-sharing-error-terminate \
-    --on-active=10min \
+    --on-active=15min \
     /sbin/shutdown -h now || /sbin/shutdown -h now
 }
 trap on_error ERR
@@ -25,27 +25,59 @@ install -d -m 0700 /opt/car-sharing
 git clone --depth 1 --branch "${repository_branch}" "${repository_url}" /opt/car-sharing/source
 test "$(git -C /opt/car-sharing/source rev-parse HEAD)" = "${repository_ref}"
 
-cat >/opt/car-sharing/app.env <<'ENV'
-APP_BASE_URL=http://localhost:${app_port}
-BOOTSTRAP_MANAGER_ENABLED=false
-DB_PASSWORD=${mysql_password}
-DB_URL=jdbc:mysql://mysql:3306/car_sharing
-DB_USERNAME=car_sharing
-JWT_EXPIRATION=1h
-JWT_ISSUER=car-sharing-service
-JWT_SECRET=${jwt_secret}
-OVERDUE_NOTIFICATION_CRON=0 0 9 * * *
-OVERDUE_NOTIFICATION_ZONE=UTC
-SPRING_PROFILES_ACTIVE=prod
-STRIPE_SECRET_KEY=sk_test_aws_demo_placeholder
-STRIPE_WEBHOOK_SECRET=whsec_aws_demo_placeholder
-TELEGRAM_BOT_TOKEN=aws-demo-placeholder
-TELEGRAM_CHAT_ID=aws-demo-placeholder
-ENV
-chmod 0600 /opt/car-sharing/app.env
+read_parameter() {
+  aws ssm get-parameter \
+    --region "${aws_region}" \
+    --name "$1" \
+    --with-decryption \
+    --query Parameter.Value \
+    --output text
+}
+
+stripe_secret_key="$(read_parameter "${parameter_prefix}/stripe-secret-key")"
+stripe_webhook_secret="$(read_parameter "${parameter_prefix}/stripe-webhook-secret")"
+telegram_bot_token="$(read_parameter "${parameter_prefix}/telegram-bot-token")"
+telegram_chat_id="$(read_parameter "${parameter_prefix}/telegram-chat-id")"
+manager_email="$(read_parameter "${parameter_prefix}/manager-email")"
+manager_first_name="$(read_parameter "${parameter_prefix}/manager-first-name")"
+manager_last_name="$(read_parameter "${parameter_prefix}/manager-last-name")"
+manager_password="$(read_parameter "${parameter_prefix}/manager-password")"
+
+install -m 0600 /dev/null /opt/car-sharing/app.env
+{
+  printf '%s\n' \
+    'APP_BASE_URL=https://${public_hostname}' \
+    'BOOTSTRAP_MANAGER_ENABLED=true' \
+    'DB_URL=jdbc:mysql://mysql:3306/car_sharing' \
+    'DB_USERNAME=car_sharing' \
+    'JWT_EXPIRATION=1h' \
+    'JWT_ISSUER=car-sharing-service' \
+    'OVERDUE_NOTIFICATION_CRON=0 0 9 * * *' \
+    'OVERDUE_NOTIFICATION_ZONE=Europe/Warsaw' \
+    'SPRING_PROFILES_ACTIVE=prod'
+  printf 'DB_PASSWORD=%s\n' '${mysql_password}'
+  printf 'JWT_SECRET=%s\n' '${jwt_secret}'
+  printf 'STRIPE_SECRET_KEY=%s\n' "$stripe_secret_key"
+  printf 'STRIPE_WEBHOOK_SECRET=%s\n' "$stripe_webhook_secret"
+  printf 'TELEGRAM_BOT_TOKEN=%s\n' "$telegram_bot_token"
+  printf 'TELEGRAM_CHAT_ID=%s\n' "$telegram_chat_id"
+  printf 'BOOTSTRAP_MANAGER_EMAIL=%s\n' "$manager_email"
+  printf 'BOOTSTRAP_MANAGER_FIRST_NAME=%s\n' "$manager_first_name"
+  printf 'BOOTSTRAP_MANAGER_LAST_NAME=%s\n' "$manager_last_name"
+  printf 'BOOTSTRAP_MANAGER_PASSWORD=%s\n' "$manager_password"
+} >/opt/car-sharing/app.env
+
+cat >/opt/car-sharing/Caddyfile <<'CADDY'
+${public_hostname} {
+  encode zstd gzip
+  reverse_proxy car-sharing-service:8080
+}
+CADDY
 
 docker network create car-sharing
 docker volume create car-sharing-mysql
+docker volume create car-sharing-caddy-data
+docker volume create car-sharing-caddy-config
 
 docker run --detach \
   --name mysql \
@@ -66,22 +98,33 @@ for attempt in $(seq 1 60); do
 done
 
 docker exec mysql mysqladmin ping --host localhost --user root --password="${mysql_root_password}" --silent
-docker build --tag car-sharing-service:aws-demo /opt/car-sharing/source
+docker build --tag car-sharing-service:portfolio /opt/car-sharing/source
 
 docker run --detach \
   --name car-sharing-service \
   --network car-sharing \
   --restart unless-stopped \
   --env-file /opt/car-sharing/app.env \
-  --publish ${app_port}:8080 \
-  car-sharing-service:aws-demo
+  car-sharing-service:portfolio
 
 for attempt in $(seq 1 80); do
-  if curl --fail --silent http://localhost:${app_port}/actuator/health | grep --quiet '"status":"UP"'; then
-    trap - ERR
-    exit 0
+  if docker exec car-sharing-service wget --quiet --tries=1 --spider http://localhost:8080/actuator/health; then
+    break
   fi
   sleep 15
 done
 
-false
+docker exec car-sharing-service wget --quiet --tries=1 --spider http://localhost:8080/actuator/health
+
+docker run --detach \
+  --name caddy \
+  --network car-sharing \
+  --restart unless-stopped \
+  --publish 80:80 \
+  --publish 443:443 \
+  --volume /opt/car-sharing/Caddyfile:/etc/caddy/Caddyfile:ro \
+  --volume car-sharing-caddy-data:/data \
+  --volume car-sharing-caddy-config:/config \
+  caddy:2.10-alpine
+
+trap - ERR
