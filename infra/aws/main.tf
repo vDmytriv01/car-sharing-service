@@ -53,12 +53,20 @@ resource "aws_ssm_parameter" "stripe_secret_key" {
   name  = "${local.parameter_prefix}/stripe-secret-key"
   type  = "SecureString"
   value = var.stripe_secret_key
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "stripe_webhook_secret" {
   name  = "${local.parameter_prefix}/stripe-webhook-secret"
   type  = "SecureString"
   value = var.stripe_webhook_secret
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "telegram_bot_token" {

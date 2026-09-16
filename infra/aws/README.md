@@ -65,6 +65,10 @@ Then run:
 Terraform waits until the public health endpoint returns `UP`. The output also
 contains the base API URL and the instance ID.
 
+Stripe keys can be rotated directly in Parameter Store after the first apply.
+Terraform manages both parameter resources but intentionally ignores later
+value changes, so a normal plan cannot overwrite rotated credentials.
+
 ## Remove
 
 Use the same sensitive environment variables and variable file when removing
