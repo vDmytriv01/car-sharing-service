@@ -14,6 +14,18 @@ REST API for managing a car-sharing fleet, rentals, payments, and customer notif
 
 </div>
 
+## Live demo
+
+- Swagger UI: <https://63-187-110-243.sslip.io/swagger-ui.html>
+- Health check: <https://63-187-110-243.sslip.io/actuator/health>
+
+The portfolio environment runs on AWS in `eu-central-1` and is provisioned by
+Terraform. One EC2 instance runs Caddy, the Spring Boot application, and MySQL
+in isolated Docker containers. Caddy provides HTTPS, while application secrets
+are stored as encrypted AWS Systems Manager parameters. The demo instance has
+an automatic three-day shutdown as a cost-safety measure, so the links are
+available only during an active review window.
+
 ## About the project
 
 Car Sharing Service is a REST API for a complete car rental flow. Managers maintain the fleet, customers rent and return available cars, Stripe handles rental payments and overdue fines, and Telegram sends operational notifications.
@@ -98,6 +110,7 @@ Payment types are `PAYMENT` and `FINE`. Payment statuses are `PENDING` and `PAID
 | API documentation | Springdoc OpenAPI and Swagger UI |
 | Testing | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
 | Delivery | Maven Wrapper, Checkstyle, Docker Compose, GitHub Actions |
+| Infrastructure | Terraform, AWS EC2, Systems Manager, Caddy |
 
 ## API overview
 
@@ -341,6 +354,10 @@ Database changes are under `src/main/resources/db/changelog`, and tests mirror t
 
 ## Current scope
 
-The current version is intended for local development and a Docker-based demo. Public CI uses isolated test configuration, so it does not call real Stripe or Telegram accounts. A deployment and Infrastructure as Code are planned as a separate stage; the application is not currently hosted on AWS.
+The application supports both local Docker development and a temporary AWS
+portfolio environment. The AWS deployment uses Stripe test mode and a dedicated
+Telegram bot; no real payment is created during demonstrations. Public CI uses
+isolated test configuration and never calls external Stripe or Telegram
+accounts.
 
 The functional scope follows the [Mate Academy car-sharing service specification](https://github.com/mate-academy/jv-car-sharing-service).
